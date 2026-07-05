@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Habla con tu dinero</title>
+
+<!-- Vega-Lite: renderiza las especificaciones de gráfico que genera el LLM -->
+<script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --fondo:#EFF3EF;          /* verde-gris muy claro */
+    --superficie:#FFFFFF;
+    --tinta:#17211B;
+    --tinta-suave:#5C6B61;
+    --verde:#0E6B4F;          /* acento principal (banca) */
+    --verde-claro:#E3EFE9;
+    --rojo:#B3402A;
+    --linea:#DDE4DE;
+    --radio:14px;
+    --sombra:0 1px 2px rgba(23,33,27,.06), 0 8px 24px rgba(23,33,27,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--fondo); color:var(--tinta);
+    font-family:'Manrope',system-ui,sans-serif; font-size:15px; line-height:1.55;
+    display:flex; flex-direction:column;
+  }
+
+  /* ── Cabecera ─────────────────────────────────────────── */
+  header{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:14px 22px; background:var(--superficie); border-bottom:1px solid var(--linea);
+  }
+  .marca{display:flex; align-items:baseline; gap:10px}
+  .marca h1{font-family:'Fraunces',serif; font-weight:600; font-size:20px; margin:0; color:var(--verde)}
+  .marca span{font-size:12px; color:var(--tinta-suave)}
+  .saldo{
+    font-variant-numeric:tabular-nums; font-weight:800; font-size:16px;
+    background:var(--verde-claro); color:var(--verde);
+    padding:7px 14px; border-radius:999px; transition:transform .25s;
+  }
+  .saldo.actualizado{transform:scale(1.08)}
+  .saldo small{font-weight:600; font-size:11px; display:block; color:var(--tinta-suave); text-align:right}
+
+  /* ── Conversación ─────────────────────────────────────── */
+  main{flex:1; overflow-y:auto; padding:26px 0 12px}
+  .contenedor{max-width:760px; margin:0 auto; padding:0 18px; display:flex; flex-direction:column; gap:16px}
+
+  .msg{max-width:86%; padding:12px 16px; border-radius:var(--radio); box-shadow:var(--sombra); white-space:pre-wrap}
+  .msg.usuario{align-self:flex-end; background:var(--verde); color:#fff; border-bottom-right-radius:4px}
+  .msg.asistente{align-self:flex-start; background:var(--superficie); border-bottom-left-radius:4px}
+  .msg.asistente:empty::after{content:'●'; color:var(--verde); animation:parpadeo 1s infinite}
+  @keyframes parpadeo{50%{opacity:.2}}
+
+  .bloque-asistente{align-self:flex-start; max-width:92%; display:flex; flex-direction:column; gap:10px}
+
+  /* Chip de SQL (transparencia del text-to-SQL) */
+  details.sql{
+    background:var(--superficie); border:1px solid var(--linea); border-radius:10px;
+    font-size:12.5px; overflow:hidden;
+  }
+  details.sql summary{
+    cursor:pointer; padding:8px 12px; color:var(--tinta-suave); font-weight:600;
+    list-style:none; display:flex; gap:8px; align-items:center;
+  }
+  details.sql summary::before{content:'⌕'; color:var(--verde); font-size:14px}
+  details.sql pre{
+    margin:0; padding:10px 12px; background:#111A15; color:#CFE8DC;
+    font-family:ui-monospace,monospace; font-size:12px; overflow-x:auto;
+  }
+  details.sql.con-error summary{color:var(--rojo)}
+
+  /* Tarjeta de gráfico generada por la IA */
+  .tarjeta-grafico{
+    background:var(--superficie); border:1px solid var(--linea); border-radius:var(--radio);
+    box-shadow:var(--sombra); padding:14px; width:min(640px, 100%);
+  }
+  .tarjeta-grafico .vega{width:100%; overflow-x:auto}
+  .tarjeta-grafico .porque{
+    margin-top:8px; padding-top:8px; border-top:1px dashed var(--linea);
+    font-size:12.5px; color:var(--tinta-suave);
+  }
+  .tarjeta-grafico .porque b{color:var(--verde)}
+
+  /* Sugerencias iniciales */
+  .sugerencias{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:8px}
+  .sugerencias button{
+    background:var(--superficie); border:1px solid var(--linea); border-radius:999px;
+    padding:8px 14px; font:inherit; font-size:13px; cursor:pointer; color:var(--tinta);
+  }
+  .sugerencias button:hover{border-color:var(--verde); color:var(--verde)}
+
+  .aviso-error{align-self:center; color:var(--rojo); font-size:13px; background:#FBEDE9; padding:8px 14px; border-radius:10px}
+
+  /* ── Barra de entrada ─────────────────────────────────── */
+  footer{padding:12px 18px 18px; background:linear-gradient(transparent, var(--fondo) 40%)}
+  .entrada{
+    max-width:760px; margin:0 auto; display:flex; gap:8px; align-items:center;
+    background:var(--superficie); border:1px solid var(--linea); border-radius:999px;
+    padding:6px 6px 6px 18px; box-shadow:var(--sombra);
+  }
+  .entrada input{flex:1; border:none; outline:none; font:inherit; background:transparent; min-width:0}
+  .entrada button{
+    border:none; border-radius:999px; width:42px; height:42px; cursor:pointer;
+    font-size:18px; display:grid; place-items:center; background:transparent; color:var(--tinta-suave);
+    transition:background .15s;
+  }
+  .entrada button:hover{background:var(--verde-claro); color:var(--verde)}
+  .entrada button.enviar{background:var(--verde); color:#fff}
+  .entrada button.mic.grabando{background:var(--rojo); color:#fff; animation:pulso 1.2s infinite}
+  @keyframes pulso{50%{box-shadow:0 0 0 8px rgba(179,64,42,.15)}}
+  .entrada button.tts.activo{color:var(--verde)}
+  .pie{max-width:760px; margin:8px auto 0; text-align:center; font-size:11.5px; color:var(--tinta-suave)}
+
+  button:focus-visible, input:focus-visible, summary:focus-visible{outline:2px solid var(--verde); outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="marca">
+    <h1>Habla con tu dinero</h1>
+    <span>Reto IA · Unicaja &amp; UGR</span>
+  </div>
+  <div class="saldo" id="saldo"><small>Saldo disponible</small>—</div>
+</header>
+
+<main>
+  <div class="contenedor" id="chat">
+    <div class="msg asistente">¡Hola! Soy tu asistente bancario. Puedes hablarme o escribirme: consulta tu saldo, envía un Bizum o pregúntame lo que quieras sobre tus movimientos.</div>
+    <div class="sugerencias" id="sugerencias">
+      <button>¿Cuánto llevo gastado en gasolina este mes?</button>
+      <button>¿Cuándo pagué el seguro del coche?</button>
+      <button>¿Cuál es mi saldo?</button>
+      <button>Compara mis gastos por categoría de los últimos 3 meses</button>
+      <button>Envía 20 € por Bizum a María López</button>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="entrada">
+    <input id="input" type="text" placeholder="Escribe o pulsa el micrófono…" autocomplete="off">
+    <button class="tts" id="btnTts" title="Leer respuestas en voz alta">🔊</button>
+    <button class="mic" id="btnMic" title="Hablar">🎙️</button>
+    <button class="enviar" id="btnEnviar" title="Enviar">➤</button>
+  </div>
+  <div class="pie">Entorno de demostración con datos ficticios · El asistente pide confirmación antes de cualquier envío de dinero</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Cliente del asistente.
+   Tres piezas: (1) WebSocket con el backend, (2) voz del navegador
+   (Web Speech API: reconocimiento + síntesis), (3) render de eventos
+   (texto en streaming, chips SQL, tarjetas de gráfico Vega-Lite).
+   ===================================================================== */
+
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const saldoEl = document.getElementById('saldo');
+const btnMic = document.getElementById('btnMic');
+const btnTts = document.getElementById('btnTts');
+
+let ws = null;
+let bloqueActual = null;   // contenedor de la respuesta en curso
+let burbujaActual = null;  // burbuja de texto en streaming
+let ttsActivo = false;     // hablar las respuestas en voz alta
+let ultimaEntradaFueVoz = false;
+
+/* ── 1. WebSocket ──────────────────────────────────────────────────── */
+function conectar(){
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onmessage = (e) => manejarEvento(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(conectar, 1000); // reconexión automática
+}
+conectar();
+
+function enviar(texto){
+  texto = (texto || input.value).trim();
+  if (!texto || !ws || ws.readyState !== WebSocket.OPEN) return;
+  document.getElementById('sugerencias')?.remove();
+  speechSynthesis.cancel(); // si estaba hablando, calla al recibir nueva orden
+
+  const burbuja = document.createElement('div');
+  burbuja.className = 'msg usuario';
+  burbuja.textContent = texto;
+  chat.appendChild(burbuja);
+
+  ws.send(JSON.stringify({ mensaje: texto }));
+  input.value = '';
+  bajar();
+}
+
+/* ── 2. Eventos del servidor ───────────────────────────────────────── */
+function manejarEvento(ev){
+  switch (ev.type) {
+
+    case 'inicio_respuesta':
+      bloqueActual = document.createElement('div');
+      bloqueActual.className = 'bloque-asistente';
+      burbujaActual = document.createElement('div');
+      burbujaActual.className = 'msg asistente';
+      bloqueActual.appendChild(burbujaActual);
+      chat.appendChild(bloqueActual);
+      break;
+
+    case 'texto': // streaming token a token
+      if (burbujaActual) burbujaActual.textContent += ev.delta;
+      bajar();
+      break;
+
+    case 'sql': { // transparencia: mostramos el SQL que ha generado la IA
+      const d = document.createElement('details');
+      d.className = 'sql' + (ev.error ? ' con-error' : '');
+      d.innerHTML = `<summary>${ev.error ? 'Consulta con error (la IA se autocorrige)' : 'Consulta generada por la IA'}${ev.proposito ? ' · ' + escapar(ev.proposito) : ''}</summary><pre>${escapar(ev.sql)}</pre>`;
+      bloqueActual?.appendChild(d);
+      // el texto de la respuesta sigue debajo del SQL:
+      nuevaBurbuja();
+      bajar();
+      break;
+    }
+
+    case 'grafico': { // la IA ha decidido y construido un gráfico Vega-Lite
+      const tarjeta = document.createElement('div');
+      tarjeta.className = 'tarjeta-grafico';
+      const vega = document.createElement('div');
+      vega.className = 'vega';
+      tarjeta.appendChild(vega);
+      if (ev.razonamiento) {
+        const p = document.createElement('div');
+        p.className = 'porque';
+        p.innerHTML = `<b>Por qué este gráfico:</b> ${escapar(ev.razonamiento)}`;
+        tarjeta.appendChild(p);
+      }
+      bloqueActual?.appendChild(tarjeta);
+      // Tema visual coherente con la interfaz:
+      ev.spec.config = Object.assign({
+        font: 'Manrope', background: 'transparent',
+        range: { category: ['#0E6B4F','#5AA98C','#B3402A','#D9A441','#33556B','#8A8F6A','#7A4E7E','#C87456'] },
+        axis: { labelColor:'#5C6B61', titleColor:'#17211B', gridColor:'#E7ECE7' },
+        view: { stroke: null }
+      }, ev.spec.config || {});
+      ev.spec.width = ev.spec.width || 'container';
+      vegaEmbed(vega, ev.spec, { actions:false }).catch(err => {
+        vega.textContent = 'No se pudo renderizar el gráfico: ' + err.message;
+      });
+      nuevaBurbuja();
+      bajar();
+      break;
+    }
+
+    case 'saldo': {
+      saldoEl.innerHTML = '<small>Saldo disponible</small>' +
+        ev.valor.toLocaleString('es-ES', { style:'currency', currency:'EUR' });
+      saldoEl.classList.add('actualizado');
+      setTimeout(() => saldoEl.classList.remove('actualizado'), 300);
+      break;
+    }
+
+    case 'fin_respuesta':
+      if (burbujaActual && !burbujaActual.textContent) burbujaActual.remove();
+      if (ev.texto && (ttsActivo || ultimaEntradaFueVoz)) hablar(ev.texto);
+      ultimaEntradaFueVoz = false;
+      bajar();
+      break;
+
+    case 'error': {
+      const e = document.createElement('div');
+      e.className = 'aviso-error';
+      e.textContent = 'Ha ocurrido un problema: ' + ev.detalle;
+      chat.appendChild(e);
+      bajar();
+      break;
+    }
+  }
+}
+
+function nuevaBurbuja(){
+  // Tras un SQL o un gráfico, el texto siguiente va en una burbuja nueva
+  if (burbujaActual && !burbujaActual.textContent) { burbujaActual.remove(); }
+  burbujaActual = document.createElement('div');
+  burbujaActual.className = 'msg asistente';
+  bloqueActual?.appendChild(burbujaActual);
+}
+
+/* ── 3. Voz del navegador (Web Speech API) ─────────────────────────── */
+const Reconocedor = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+
+if (Reconocedor) {
+  rec = new Reconocedor();
+  rec.lang = 'es-ES';
+  rec.interimResults = true;
+  rec.onresult = (e) => {
+    const texto = Array.from(e.results).map(r => r[0].transcript).join('');
+    input.value = texto;
+    if (e.results[e.results.length - 1].isFinal) {
+      ultimaEntradaFueVoz = true;
+      enviar(texto);
+    }
+  };
+  rec.onend = () => btnMic.classList.remove('grabando');
+  rec.onerror = () => btnMic.classList.remove('grabando');
+} else {
+  btnMic.title = 'Tu navegador no soporta reconocimiento de voz (prueba Chrome)';
+}
+
+btnMic.addEventListener('click', () => {
+  if (!rec) return;
+  if (btnMic.classList.contains('grabando')) { rec.stop(); return; }
+  speechSynthesis.cancel();
+  btnMic.classList.add('grabando');
+  rec.start();
+});
+
+function hablar(texto){
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'es-ES';
+  u.rate = 1.05;
+  const vozEs = speechSynthesis.getVoices().find(v => v.lang.startsWith('es'));
+  if (vozEs) u.voice = vozEs;
+  speechSynthesis.speak(u);
+}
+
+btnTts.addEventListener('click', () => {
+  ttsActivo = !ttsActivo;
+  btnTts.classList.toggle('activo', ttsActivo);
+  if (!ttsActivo) speechSynthesis.cancel();
+});
+
+/* ── Utilidades ────────────────────────────────────────────────────── */
+document.getElementById('btnEnviar').addEventListener('click', () => enviar());
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviar(); });
+document.getElementById('sugerencias').addEventListener('click', (e) => {
+  if (e.target.tagName === 'BUTTON') enviar(e.target.textContent);
+});
+function bajar(){ chat.parentElement.scrollTop = chat.parentElement.scrollHeight; }
+function escapar(s){ const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+</script>
+</body>
+</html>
