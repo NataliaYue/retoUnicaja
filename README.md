@@ -1,3 +1,4 @@
+README EL AGENT.PY Y CAMBIOS EN REQUIREMENTS PARA FUNCIONAR CON OLLAMA Y NO SOLO CON CLAUDE
 # 🗣️ Habla con tu dinero — Asistente bancario conversacional
 
 Proyecto base para el **Reto IA de Unicaja & UGR** (Cátedra IA Responsable en Finanzas). Asistente bancario por **voz y texto** que consulta saldo, envía Bizums, responde preguntas sobre el histórico de movimientos convirtiendo **lenguaje natural → SQL**, y **decide y genera gráficos en tiempo real** sin plantillas.
