@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 from .config import MAX_ITERACIONES_AGENTE, MAX_TOKENS, MODELO, system_prompt
 from .tools import TOOLS, ejecutar_tool
 
+
 # ==============================================================================
 # CONFIGURACIÓN DINÁMICA DEL PROVEEDOR
 # ==============================================================================
@@ -43,8 +44,32 @@ def adaptar_herramientas_a_openai(anthropic_tools):
 OPENAI_TOOLS = adaptar_herramientas_a_openai(TOOLS)
 
 
+
+
+def es_consulta_saldo(mensaje: str) -> bool:
+    mensaje = mensaje.lower().strip()
+
+    expresiones_saldo = [
+        "saldo",
+        "saldo actual",
+        "saldo disponible",
+        "dinero disponible",
+        "cuánto dinero tengo",
+        "cuanto dinero tengo",
+        "cuánto me queda",
+        "cuanto me queda",
+        "cuánto tengo",
+        "cuanto tengo",
+        "cual es mi saldo actual"
+    ]
+
+    return any(expr in mensaje for expr in expresiones_saldo)
+
+def formatear_euros(cantidad: float) -> str:
+    texto = f"{cantidad:,.2f}"
+    return texto.replace(",", "X").replace(".", ",").replace("X", ".") + " €"
 # ==============================================================================
-# CLASE CLÁSICA DEL AGENTE (AHORA MULTI-PROVEEDOR)
+# CLASE CLÁSICA DEL AGENTE
 # ==============================================================================
 class Agente:
     """Una instancia por conexión WebSocket: mantiene el historial de la conversación."""
@@ -55,6 +80,23 @@ class Agente:
         self.system = system_prompt()
 
     async def procesar(self, mensaje_usuario: str) -> None:
+        
+        if es_consulta_saldo(mensaje_usuario):
+            await self.emitir({"type": "inicio_respuesta"})
+
+            salida_json = await ejecutar_tool("consultar_saldo", {}, self.emitir)
+            salida = json.loads(salida_json)
+
+            if salida.get("estado") == "ok":
+                texto = f"Tu saldo disponible es {formatear_euros(salida['saldo'])}."
+            else:
+                texto = "No he podido consultar tu saldo ahora mismo."
+
+            await self.emitir({"type": "texto", "delta": texto})
+            await self.emitir({"type": "fin_respuesta", "texto": texto})
+            return
+        
+        
         # En el estándar OpenAI, el system prompt se suele pasar como primer mensaje
         if not self.historial:
             self.historial.append({"role": "system", "content": self.system})
