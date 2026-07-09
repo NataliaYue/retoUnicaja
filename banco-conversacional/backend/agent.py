@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import unicodedata
 from difflib import get_close_matches
@@ -84,6 +85,53 @@ def formatear_euros(cantidad: float) -> str:
     return texto.replace(",", "X").replace(".", ",").replace("X", ".") + " €"
 
 
+
+def extraer_peticion_bizum(mensaje: str) -> dict | None:
+    """
+    Detecta peticiones simples de Bizum en lenguaje natural.
+
+    Ejemplos:
+    - Haz un bizum a María López de 2 euros
+    - Envía un Bizum a Maria Lopez por 2.5 euros
+    - Manda 10 euros a Ana Torres por bizum
+    """
+    texto = mensaje.strip()
+
+    if "bizum" not in normalizar_texto(texto):
+        return None
+
+    patrones = [
+        r"(?:haz|hacer|envia|envía|manda|mandar)\s+(?:un\s+)?bizum\s+a\s+(.+?)\s+(?:de|por)\s+(\d+(?:[,.]\d+)?)\s*(?:€|euros?)?",
+        r"(?:envia|envía|manda|mandar)\s+(\d+(?:[,.]\d+)?)\s*(?:€|euros?)\s+a\s+(.+?)\s+(?:por\s+)?bizum",
+    ]
+
+    for patron in patrones:
+        match = re.search(patron, texto, flags=re.IGNORECASE)
+
+        if not match:
+            continue
+
+        if patron.startswith("(?:haz"):
+            destinatario = match.group(1).strip()
+            cantidad_txt = match.group(2).replace(",", ".")
+        else:
+            cantidad_txt = match.group(1).replace(",", ".")
+            destinatario = match.group(2).strip()
+
+        try:
+            cantidad = round(float(cantidad_txt), 2)
+        except ValueError:
+            return None
+
+        return {
+            "destinatario": destinatario,
+            "cantidad": cantidad,
+            "concepto": "",
+        }
+
+    return None
+
+
 def normalizar_texto(texto: str) -> str:
     """
     Normaliza texto para comparar respuestas cortas:
@@ -150,27 +198,37 @@ def buscar_contacto_bizum(nombre: str) -> dict:
         return {"estado": "no_encontrado"}
 
     contactos = respuesta["contactos"]
-    nombre_lower = nombre.lower()
+    nombre_normalizado = normalizar_texto(nombre)
 
-    # Coincidencia exacta ignorando mayúsculas/minúsculas.
     for contacto in contactos:
-        if contacto.lower() == nombre_lower:
+        if normalizar_texto(contacto) == nombre_normalizado:
             return {"estado": "exacto", "contacto": contacto}
 
-    # Coincidencia parcial: "María" -> "María López".
     parciales = [
         contacto for contacto in contactos
-        if nombre_lower in contacto.lower()
+        if nombre_normalizado in normalizar_texto(contacto)
     ]
 
     if len(parciales) == 1:
         return {"estado": "sugerencia", "contacto": parciales[0]}
 
-    # Coincidencia aproximada: "María Lipiz" -> "María López".
-    sugerencias = get_close_matches(nombre, contactos, n=1, cutoff=0.65)
+    contactos_normalizados = {
+        normalizar_texto(contacto): contacto
+        for contacto in contactos
+    }
+
+    sugerencias = get_close_matches(
+        nombre_normalizado,
+        list(contactos_normalizados.keys()),
+        n=1,
+        cutoff=0.65,
+    )
 
     if sugerencias:
-        return {"estado": "sugerencia", "contacto": sugerencias[0]}
+        return {
+            "estado": "sugerencia",
+            "contacto": contactos_normalizados[sugerencias[0]],
+        }
 
     return {"estado": "no_encontrado"}
 # ==============================================================================
@@ -229,6 +287,7 @@ class Agente:
             "Responde “sí” para usarlo o “no” para cancelar."
         )
         return True
+    
     async def gestionar_bizum_pendiente(self, mensaje_usuario: str) -> bool:
         """
         Si hay un Bizum pendiente, este método decide si el usuario
@@ -243,6 +302,7 @@ class Agente:
         if es_confirmacion_bizum(mensaje_usuario):
             pendiente = self.bizum_pendiente
             self.bizum_pendiente = None
+            pendiente["confirmado"] = True
 
             await self.emitir({"type": "inicio_respuesta"})
 
@@ -256,7 +316,11 @@ class Agente:
                     f"Tu nuevo saldo es {formatear_euros(salida['nuevo_saldo'])}."
                 )
             else:
-                texto = salida.get("motivo", "No se ha podido enviar el Bizum.")
+                texto = (
+                    salida.get("motivo")
+                    or salida.get("error")
+                    or f"No se ha podido enviar el Bizum. Respuesta interna: {salida}"
+                )
 
             await self.emitir({"type": "texto", "delta": texto})
             await self.emitir({"type": "fin_respuesta", "texto": texto})
@@ -275,7 +339,53 @@ class Agente:
         return True
     
     
-    
+    async def preparar_bizum_desde_backend(self, datos: dict) -> None:
+        destinatario_original = datos.get("destinatario", "").strip()
+        cantidad = round(float(datos.get("cantidad", 0)), 2)
+        concepto = datos.get("concepto", "").strip()
+
+        validacion = buscar_contacto_bizum(destinatario_original)
+
+        if validacion["estado"] == "no_encontrado":
+            texto = (
+                f"No encuentro a “{destinatario_original}” como contacto de Bizum. "
+                "Revisa el nombre o usa un contacto con el que ya hayas hecho Bizum."
+            )
+            await self.responder_directo(texto)
+            return
+
+        if validacion["estado"] == "sugerencia":
+            contacto_sugerido = validacion["contacto"]
+
+            self.correccion_contacto_pendiente = {
+                "destinatario_original": destinatario_original,
+                "contacto_sugerido": contacto_sugerido,
+                "cantidad": cantidad,
+                "concepto": concepto,
+            }
+
+            texto = (
+                f"No encuentro exactamente “{destinatario_original}”. "
+                f"¿Querías decir {contacto_sugerido}?"
+            )
+
+            await self.responder_directo(texto)
+            return
+
+        destinatario = validacion["contacto"]
+
+        self.bizum_pendiente = {
+            "destinatario": destinatario,
+            "cantidad": cantidad,
+            "concepto": concepto,
+        }
+
+        texto = (
+            f"Vas a enviar {formatear_euros(cantidad)} "
+            f"a {destinatario}. ¿Confirmas el envío?"
+        )
+
+        await self.responder_directo(texto)
     
     
     async def procesar(self, mensaje_usuario: str) -> None:
@@ -285,6 +395,11 @@ class Agente:
         
         # Si hay un Bizum pendiente, este mensaje se interpreta como confirmación/cancelación.
         if await self.gestionar_bizum_pendiente(mensaje_usuario):
+            return
+        peticion_bizum = extraer_peticion_bizum(mensaje_usuario)
+        
+        if peticion_bizum:
+            await self.preparar_bizum_desde_backend(peticion_bizum)
             return
 
         # Atajo rápido: consultar saldo no necesita pasar por el LLM.
@@ -311,11 +426,10 @@ class Agente:
         self.historial.append({"role": "user", "content": mensaje_usuario})
         await self.emitir({"type": "inicio_respuesta"})
 
-        texto_completo = ""
+        texto_final = ""
 
         try:
             for _ in range(MAX_ITERACIONES_AGENTE):
-                # 1) Llamada al LLM con streaming (Compatible con OpenAI/DeepSeek/Ollama/vLLM)
                 stream = await client.chat.completions.create(
                     model=MODELO,
                     max_tokens=MAX_TOKENS,
@@ -325,56 +439,65 @@ class Agente:
                 )
 
                 tool_calls_locales = {}
-                
+                texto_iteracion = ""
+
                 async for chunk in stream:
                     if not chunk.choices:
                         continue
+
                     delta = chunk.choices[0].delta
 
-                    # Capturar fragmentos de texto (Streaming)
+                    # Importante:
+                    # NO emitimos texto todavía. Lo guardamos en buffer.
+                    # Solo se mostrará si al final no hay tool calls.
                     if delta.content:
-                        texto_completo += delta.content
-                        await self.emitir({"type": "texto", "delta": delta.content})
+                        texto_iteracion += delta.content
 
-                    # Capturar fragmentos de invocación de herramientas
                     if delta.tool_calls:
                         for tool_call in delta.tool_calls:
                             idx = tool_call.index
+
                             if idx not in tool_calls_locales:
                                 tool_calls_locales[idx] = {
                                     "id": tool_call.id,
                                     "name": tool_call.function.name,
-                                    "arguments": ""
+                                    "arguments": "",
                                 }
+
                             if tool_call.function.arguments:
                                 tool_calls_locales[idx]["arguments"] += tool_call.function.arguments
 
-                # Reconstruir la estructura del mensaje del asistente para guardarla en el historial
-                msg_asistente = {"role": "assistant", "content": texto_completo or None}
+                msg_asistente = {
+                    "role": "assistant",
+                    "content": texto_iteracion or None,
+                }
+
                 if tool_calls_locales:
                     msg_asistente["tool_calls"] = [
                         {
                             "id": tc["id"],
                             "type": "function",
-                            "function": {"name": tc["name"], "arguments": tc["arguments"]}
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": tc["arguments"],
+                            },
                         }
                         for tc in tool_calls_locales.values()
                     ]
 
-                # 2) Guardamos la respuesta del asistente en el historial
                 self.historial.append(msg_asistente)
 
-                # 3) ¿Ha pedido herramientas? Si no, romper el bucle agéntico.
+                # Si no hay herramientas, ahora sí mostramos el texto del LLM.
                 if not tool_calls_locales:
+                    texto_final += texto_iteracion
+                    await self.emitir({"type": "texto", "delta": texto_iteracion})
                     break
 
-                # 4) Ejecutar cada tool_call y devolver los resultados al modelo
+                # Si hay herramientas, NO mostramos texto_iteracion.
+                # Responderán las tools o el backend controlado.
                 for tc in tool_calls_locales.values():
                     args = json.loads(tc["arguments"]) if tc["arguments"] else {}
 
-                    # ----------------------------------------------------------
-                    # Confirmación obligatoria de Bizum
-                    # ----------------------------------------------------------
                     if tc["name"] == "enviar_bizum":
                         destinatario = args.get("destinatario", "").strip()
                         cantidad = round(float(args.get("cantidad", 0)), 2)
@@ -440,7 +563,6 @@ class Agente:
                         await self.emitir({"type": "fin_respuesta", "texto": texto})
                         return
 
-                    # Resto de herramientas: saldo, movimientos, gráficos...
                     salida = await ejecutar_tool(tc["name"], args, self.emitir)
 
                     self.historial.append({
@@ -449,9 +571,8 @@ class Agente:
                         "name": tc["name"],
                         "content": str(salida),
                     })
-                # El bucle continúa hacia la siguiente iteración enviando los resultados al LLM
 
         except Exception as e:
             await self.emitir({"type": "error", "detalle": str(e)})
 
-        await self.emitir({"type": "fin_respuesta", "texto": texto_completo.strip()})
+        await self.emitir({"type": "fin_respuesta", "texto": texto_final.strip()})
