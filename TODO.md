@@ -13,7 +13,7 @@ Hay varias causas probables encadenadas; revisar en este orden:
 - [x] ~~**`MAX_TOKENS = 700` trunca la spec Vega-Lite**~~ **HECHO**: subido a 2000 en `backend/config.py`. Además se fijó `TEMPERATURA = 0.2` (con la temperatura por defecto qwen3 generaba SQL inválido de forma intermitente).
 - [x] ~~**`json.loads(tc["arguments"])` sin proteger**~~ **HECHO**: ahora el JSON corrupto se devuelve al modelo como tool_result de error para que se autocorrija, igual que con el SQL.
 - [x] **Historial envenenado con `content: None`** — **HECHO**: cuando el modelo devolvía una iteración vacía, se guardaba un mensaje de asistente con `content: None` y Ollama rechazaba TODA la conversación posterior con 400 `invalid message content type: <nil>`. Ahora nunca se guarda `None` (siempre string), las iteraciones vacías se reintentan una vez, y si persisten se emite un mensaje de fallback en lugar de dejar la respuesta en blanco.
-- [ ] **La spec puede llegar como string en vez de objeto** (`backend/tools.py:160`). Los modelos pequeños a menudo serializan el parámetro `spec` como string JSON. Si `isinstance(spec, str)`, intentar `json.loads(spec)` antes de rechazarla.
+- REVISAR PUES CAMBIO A QWEN QUIZA ARREGLÓ ESTO. **La spec puede llegar como string en vez de objeto** (`backend/tools.py:160`). Los modelos pequeños a menudo serializan el parámetro `spec` como string JSON. Si `isinstance(spec, str)`, intentar `json.loads(spec)` antes de rechazarla.
 - [ ] **Validación demasiado estricta** (`backend/tools.py:165-187`): exige `title`, `mark` y `encoding` en el nivel raíz, pero specs válidas con `layer`, `hconcat` o `transform` no los llevan ahí. Relajar: exigir solo `data.values`; si falta lo demás, devolver el error al LLM en vez de descartar.
 - [ ] **Acumulación de tool calls en streaming frágil** (`backend/agent.py:456-468`): con Ollama, `tool_call.id` y `function.name` pueden venir solo en el primer chunk o ser `None`. Si el primer chunk de un índice no trae nombre, se queda `None` para siempre. Guardar id/name en cuanto aparezcan (`if tool_call.id: ...`).
 - [ ] **`MAX_ITERACIONES_AGENTE = 4`** (`backend/config.py:30`) puede quedarse corto para la cadena SQL → reintento → gráfico → conclusión. Si se agota el bucle, no se emite ningún texto (respuesta vacía). Subir a 6-8 y, al agotarse, emitir un mensaje de fallback.
@@ -36,6 +36,7 @@ Hay varias causas probables encadenadas; revisar en este orden:
 
 ### 6. Configuración audio
 - [] Arreglar performance de modelo bajo situaciones de comunicación natural voice to voice.
+
 ---
 
 ## 🟠 P1 — Puntos del baremo en juego
