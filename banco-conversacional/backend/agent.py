@@ -5,7 +5,7 @@ import unicodedata
 from difflib import get_close_matches
 from openai import AsyncOpenAI
 
-from .config import MAX_ITERACIONES_AGENTE, MAX_TOKENS, MODELO, system_prompt
+from .config import MAX_ITERACIONES_AGENTE, MAX_TOKENS, MODELO, TEMPERATURA, system_prompt
 from .tools import TOOLS, ejecutar_tool
 from .banking_api import api_listar_contactos_bizum
 
@@ -20,7 +20,7 @@ PROVIDER_BASE_URLS = {
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
 }
 
-PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
+PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
 
 API_KEY = os.getenv(f"{PROVIDER.upper()}_API_KEY") or os.getenv("OPENAI_API_KEY")
 
@@ -57,6 +57,15 @@ def adaptar_herramientas_a_openai(anthropic_tools):
     return openai_tools if openai_tools else None
 
 OPENAI_TOOLS = adaptar_herramientas_a_openai(TOOLS)
+
+# Qwen3 activa por defecto un modo "thinking" que multiplica la latencia y
+# consume MAX_TOKENS antes de generar la respuesta. En Ollama se desactiva
+# pasando reasoning_effort="none" por el endpoint OpenAI-compatible.
+EXTRA_BODY = (
+    {"reasoning_effort": "none"}
+    if PROVIDER == "ollama" and "qwen3" in MODELO.lower()
+    else None
+)
 
 
 
@@ -130,6 +139,14 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
         }
 
     return None
+
+
+def limpiar_razonamiento(texto: str) -> str:
+    """
+    Qwen3 puede emitir bloques <think>...</think> (vacíos con /no_think).
+    Se eliminan para que no aparezcan en el chat ni en el TTS.
+    """
+    return re.sub(r"<think>.*?</think>", "", texto, flags=re.DOTALL).strip()
 
 
 def normalizar_texto(texto: str) -> str:
@@ -436,6 +453,8 @@ class Agente:
                     messages=self.historial,
                     tools=OPENAI_TOOLS,
                     stream=True,
+                    temperature=TEMPERATURA,
+                    extra_body=EXTRA_BODY,
                 )
 
                 tool_calls_locales = {}
@@ -489,6 +508,7 @@ class Agente:
 
                 # Si no hay herramientas, ahora sí mostramos el texto del LLM.
                 if not tool_calls_locales:
+                    texto_iteracion = limpiar_razonamiento(texto_iteracion)
                     texto_final += texto_iteracion
                     await self.emitir({"type": "texto", "delta": texto_iteracion})
                     break

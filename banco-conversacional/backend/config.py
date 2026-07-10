@@ -20,11 +20,17 @@ load_dotenv()
 # configuración del llm
 #===========================================================================
 
-#leer la variable de entorno MODELO. Si no existe, usa por defecto claude
-MODELO = os.getenv("MODELO", "claude-haiku-4-5")
+#leer la variable de entorno MODELO. Si no existe, usa por defecto qwen3 en Ollama
+MODELO = os.getenv("MODELO", "qwen3:8b")
 
-# número máximo de tokens que puede geenrar el modelo en una respuesta 
-MAX_TOKENS = 700 #2000
+# número máximo de tokens que puede geenrar el modelo en una respuesta.
+# Ojo: las specs Vega-Lite con datos incrustados ocupan >700 tokens; si se
+# trunca, el JSON del tool call llega corrupto y el gráfico no se pinta.
+MAX_TOKENS = 2000
+
+# Temperatura baja: el SQL y las specs JSON necesitan consistencia, no creatividad.
+# Con la temperatura por defecto qwen3:8b genera SQL inválido de forma intermitente.
+TEMPERATURA = 0.2
 
 # evita que el agente entre en bucles infinitos llamando herramientas repetidamente.
 MAX_ITERACIONES_AGENTE =  4 #8  
