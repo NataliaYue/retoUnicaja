@@ -2,7 +2,7 @@
 
 Baremo del reto (100 pts): Conversación 15 · Agilidad 15 · Operaciones 10 · Precisión consultas 30 · Lógica visual 10 · Gráficos sin plantillas 10 · Vídeo 5 · Memoria 5.
 Fecha límite: **30 de septiembre**.
-
+Ollama pull qwen3:8b
 ---
 
 ## 🔴 P0 — Bugs que rompen la demo (arreglar ya)
@@ -34,6 +34,8 @@ Hay varias causas probables encadenadas; revisar en este orden:
 - [ ] `requirements.txt`: los paquetes `anthropic` y `ollama` no se importan en ningún sitio y se pueden quitar. Ojo: el paquete `openai` SÍ es necesario aunque el proveedor sea Ollama — es la librería cliente con la que se habla con el endpoint OpenAI-compatible de Ollama (`http://localhost:11434/v1`).
 - [ ] `README.md` (ambos): las instrucciones dicen "pon tu ANTHROPIC_API_KEY", pero el proyecto funciona con Ollama/OpenAI-compat. Actualizar la puesta en marcha (incluye `ollama pull llama3.1` y arrancar Ollama).
 
+### 6. Configuración audio
+- [] Arreglar performance de modelo bajo situaciones de comunicación natural voice to voice.
 ---
 
 ## 🟠 P1 — Puntos del baremo en juego
