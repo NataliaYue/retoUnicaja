@@ -444,6 +444,7 @@ class Agente:
         await self.emitir({"type": "inicio_respuesta"})
 
         texto_final = ""
+        reintento_vacio = False
 
         try:
             for _ in range(MAX_ITERACIONES_AGENTE):
@@ -486,13 +487,34 @@ class Agente:
                             if tool_call.function.arguments:
                                 tool_calls_locales[idx]["arguments"] += tool_call.function.arguments
 
-                msg_asistente = {
-                    "role": "assistant",
-                    "content": texto_iteracion or None,
-                }
+                # Si no hay herramientas, ahora sí mostramos el texto del LLM.
+                if not tool_calls_locales:
+                    texto_iteracion = limpiar_razonamiento(texto_iteracion)
 
-                if tool_calls_locales:
-                    msg_asistente["tool_calls"] = [
+                    # A veces qwen3 devuelve una iteración vacía (sin texto ni
+                    # tools), sobre todo tras un tool_result. No se guarda en el
+                    # historial: un content nulo hace que Ollama rechace TODAS
+                    # las peticiones siguientes con 400 "invalid message content
+                    # type: <nil>". Se reintenta una vez; si persiste, fallback.
+                    if not texto_iteracion.strip():
+                        if not reintento_vacio:
+                            reintento_vacio = True
+                            continue
+                        texto_iteracion = (
+                            "Perdona, no he podido redactar la respuesta. "
+                            "¿Puedes repetir la pregunta?"
+                        )
+
+                    self.historial.append({"role": "assistant", "content": texto_iteracion})
+                    texto_final += texto_iteracion
+                    await self.emitir({"type": "texto", "delta": texto_iteracion})
+                    break
+
+                self.historial.append({
+                    "role": "assistant",
+                    # nunca None: Ollama rechaza mensajes con content nulo
+                    "content": texto_iteracion,
+                    "tool_calls": [
                         {
                             "id": tc["id"],
                             "type": "function",
@@ -502,21 +524,27 @@ class Agente:
                             },
                         }
                         for tc in tool_calls_locales.values()
-                    ]
-
-                self.historial.append(msg_asistente)
-
-                # Si no hay herramientas, ahora sí mostramos el texto del LLM.
-                if not tool_calls_locales:
-                    texto_iteracion = limpiar_razonamiento(texto_iteracion)
-                    texto_final += texto_iteracion
-                    await self.emitir({"type": "texto", "delta": texto_iteracion})
-                    break
+                    ],
+                })
 
                 # Si hay herramientas, NO mostramos texto_iteracion.
                 # Responderán las tools o el backend controlado.
                 for tc in tool_calls_locales.values():
-                    args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                    try:
+                        args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                    except json.JSONDecodeError as e:
+                        # JSON corrupto (p.ej. spec truncada): se devuelve el error
+                        # al modelo como tool_result para que se autocorrija,
+                        # igual que se hace con los errores de SQL.
+                        self.historial.append({
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "name": tc["name"],
+                            "content": json.dumps({
+                                "error": f"Los argumentos no son JSON válido: {e}. Reintenta la llamada."
+                            }, ensure_ascii=False),
+                        })
+                        continue
 
                     if tc["name"] == "enviar_bizum":
                         destinatario = args.get("destinatario", "").strip()
