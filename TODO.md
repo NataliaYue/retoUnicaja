@@ -1,5 +1,8 @@
 # TODO — Reto IA Unicaja & UGR (Asistente bancario conversacional)
 
+NATALIA: P0->2,4
+PABLO REYES:P0->6,7
+PIGUE:P0->1,3
 Baremo del reto (100 pts): Conversación 15 · Agilidad 15 · Operaciones 10 · Precisión consultas 30 · Lógica visual 10 · Gráficos sin plantillas 10 · Vídeo 5 · Memoria 5.
 Fecha límite: **30 de septiembre**.
 Ollama pull qwen3:8b
