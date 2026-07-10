@@ -37,6 +37,8 @@ Hay varias causas probables encadenadas; revisar en este orden:
 ### 6. Configuración audio
 - [] Arreglar performance de modelo bajo situaciones de comunicación natural voice to voice.
 
+### 7. Conjunto test
+- [] Hacer preguntas para test automatizadas (alrededor de 30 por ejemplo).
 ---
 
 ## 🟠 P1 — Puntos del baremo en juego
