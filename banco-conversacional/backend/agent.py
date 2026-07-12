@@ -71,7 +71,7 @@ EXTRA_BODY = (
 
 
 def es_consulta_saldo(mensaje: str) -> bool:
-    mensaje = mensaje.lower().strip()
+    mensaje = normalizar_texto(mensaje)
 
     expresiones_saldo = [
     "saldo",
@@ -119,12 +119,12 @@ def limpiar_markdown_respuesta(texto: str) -> str:
 
 def extraer_peticion_bizum(mensaje: str) -> dict | None:
     """
-    Detecta peticiones simples de Bizum en lenguaje natural.
+    Detecta peticiones de Bizum con distintos órdenes naturales.
 
-    Ejemplos:
-    - Haz un bizum a María López de 2 euros
-    - Envía un Bizum a Maria Lopez por 2.5 euros
-    - Manda 10 euros a Ana Torres por bizum
+    Ejemplos admitidos:
+    - Haz un Bizum a María López de 20 euros
+    - Envía 20 euros a María López por Bizum
+    - Envía 20 € por Bizum a María López
     """
     texto = mensaje.strip()
 
@@ -132,8 +132,28 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
         return None
 
     patrones = [
-        r"(?:haz|hacer|envia|envía|manda|mandar)\s+(?:un\s+)?bizum\s+a\s+(.+?)\s+(?:de|por)\s+(\d+(?:[,.]\d+)?)\s*(?:€|euros?)?",
-        r"(?:envia|envía|manda|mandar)\s+(\d+(?:[,.]\d+)?)\s*(?:€|euros?)\s+a\s+(.+?)\s+(?:por\s+)?bizum",
+        # Haz un Bizum a María López de 20 euros
+        (
+            r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
+            r"(?:un\s+)?bizum\s+a\s+"
+            r"(?P<destinatario>.+?)\s+(?:de|por)\s+"
+            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?$"
+        ),
+
+        # Envía 20 euros a María López por Bizum
+        (
+            r"^(?:envia|envía|manda|mandar)\s+"
+            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
+            r"(?P<destinatario>.+?)\s+(?:por\s+)?bizum$"
+        ),
+
+        # Envía 20 € por Bizum a María López
+        (
+            r"^(?:envia|envía|manda|mandar)\s+"
+            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+"
+            r"(?:por\s+)?bizum\s+a\s+"
+            r"(?P<destinatario>.+?)$"
+        ),
     ]
 
     for patron in patrones:
@@ -142,12 +162,8 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
         if not match:
             continue
 
-        if patron.startswith("(?:haz"):
-            destinatario = match.group(1).strip()
-            cantidad_txt = match.group(2).replace(",", ".")
-        else:
-            cantidad_txt = match.group(1).replace(",", ".")
-            destinatario = match.group(2).strip()
+        destinatario = match.group("destinatario").strip()
+        cantidad_txt = match.group("cantidad").replace(",", ".")
 
         try:
             cantidad = round(float(cantidad_txt), 2)
@@ -201,6 +217,7 @@ def es_confirmacion_bizum(mensaje: str) -> bool:
         "vale",
         "de acuerdo",
         "correcto",
+        "si, confirmo"
     }
 
 
@@ -285,12 +302,44 @@ class Agente:
         self.correccion_contacto_pendiente: dict | None = None
         
         
-    async def responder_directo(self, texto: str) -> None:
-        texto = limpiar_markdown_respuesta(texto)
-        await self.emitir({"type": "inicio_respuesta"})
-        await self.emitir({"type": "texto", "delta": texto})
-        await self.emitir({"type": "fin_respuesta", "texto": texto})
+    def asegurar_system_en_historial(self) -> None:
+        """Añade el system prompt una sola vez, antes del primer turno."""
+        if not self.historial:
+            self.historial.append({
+                "role": "system",
+                "content": self.system,
+            })
 
+
+    async def responder_directo(
+        self,
+        texto: str,
+        *,
+        emitir_inicio: bool = True,
+    ) -> None:
+        """
+        Emite una respuesta gestionada por el backend y la registra
+        como respuesta del asistente.
+        """
+        texto = limpiar_markdown_respuesta(texto)
+
+        self.historial.append({
+            "role": "assistant",
+            "content": texto,
+        })
+
+        if emitir_inicio:
+            await self.emitir({"type": "inicio_respuesta"})
+
+        await self.emitir({
+            "type": "texto",
+            "delta": texto,
+        })
+
+        await self.emitir({
+            "type": "fin_respuesta",
+            "texto": texto,
+        })
     async def gestionar_correccion_contacto_pendiente(self, mensaje_usuario: str) -> bool:
         if not self.correccion_contacto_pendiente:
             return False
@@ -318,8 +367,18 @@ class Agente:
             return True
 
         if es_cancelacion_bizum(mensaje_usuario):
-            self.correccion_contacto_pendiente = None
-            await self.responder_directo("De acuerdo, no haré el Bizum.")
+            pendiente = self.bizum_pendiente
+            self.bizum_pendiente = None
+
+            destinatario = pendiente["destinatario"]
+            cantidad = pendiente["cantidad"]
+
+            texto = (
+                f"De acuerdo, cancelo el Bizum de {formatear_euros(cantidad)} "
+                f"a {destinatario}. No se ha enviado dinero y el saldo no ha cambiado."
+            )
+
+            await self.responder_directo(texto)
             return True
 
         await self.responder_directo(
@@ -362,9 +421,10 @@ class Agente:
                     or f"No se ha podido enviar el Bizum. Respuesta interna: {salida}"
                 )
 
-            texto = limpiar_markdown_respuesta(texto)
-            await self.emitir({"type": "texto", "delta": texto})
-            await self.emitir({"type": "fin_respuesta", "texto": texto})
+            await self.responder_directo(
+                texto,
+                emitir_inicio=False,
+            )
             return True
 
         if es_cancelacion_bizum(mensaje_usuario):
@@ -430,7 +490,14 @@ class Agente:
     
     
     async def procesar(self, mensaje_usuario: str) -> None:
-        
+        # Todos los mensajes entran en el historial,
+        # también los gestionados directamente por el backend.
+        self.asegurar_system_en_historial()
+        self.historial.append({
+            "role": "user",
+            "content": mensaje_usuario,
+        })
+    
         if await self.gestionar_correccion_contacto_pendiente(mensaje_usuario):
             return
         
@@ -455,17 +522,14 @@ class Agente:
             else:
                 texto = "No he podido consultar tu saldo ahora mismo."
 
-            texto = limpiar_markdown_respuesta(texto)
-            await self.emitir({"type": "texto", "delta": texto})
-            await self.emitir({"type": "fin_respuesta", "texto": texto})
+            await self.responder_directo(
+                texto,
+                emitir_inicio=False,
+            )
             return
         
         
-        # En el estándar OpenAI, el system prompt se suele pasar como primer mensaje
-        if not self.historial:
-            self.historial.append({"role": "system", "content": self.system})
 
-        self.historial.append({"role": "user", "content": mensaje_usuario})
         await self.emitir({"type": "inicio_respuesta"})
 
         texto_final = ""
@@ -585,8 +649,22 @@ class Agente:
                                 "Revisa el nombre o usa un contacto con el que ya hayas hecho Bizum."
                             )
 
-                            await self.emitir({"type": "texto", "delta": texto})
-                            await self.emitir({"type": "fin_respuesta", "texto": texto})
+                            # Toda llamada de herramienta debe tener su resultado
+                            # antes de añadir una respuesta normal del asistente.
+                            self.historial.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "name": tc["name"],
+                                "content": json.dumps({
+                                    "estado": "no_encontrado",
+                                    "destinatario": destinatario,
+                                }, ensure_ascii=False),
+                            })
+
+                            await self.responder_directo(
+                                texto,
+                                emitir_inicio=False,
+                            )
                             return
 
                         if validacion["estado"] == "sugerencia":
@@ -604,8 +682,23 @@ class Agente:
                                 f"¿Querías decir {contacto_sugerido}?"
                             )
 
-                            await self.emitir({"type": "texto", "delta": texto})
-                            await self.emitir({"type": "fin_respuesta", "texto": texto})
+                            self.historial.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "name": tc["name"],
+                                "content": json.dumps({
+                                    "estado": "sugerencia_contacto",
+                                    "destinatario_original": destinatario,
+                                    "contacto_sugerido": contacto_sugerido,
+                                    "cantidad": cantidad,
+                                    "concepto": concepto,
+                                }, ensure_ascii=False),
+                            })
+
+                            await self.responder_directo(
+                                texto,
+                                emitir_inicio=False,
+                            )
                             return
 
                         destinatario = validacion["contacto"]
@@ -633,8 +726,10 @@ class Agente:
                             }, ensure_ascii=False),
                         })
 
-                        await self.emitir({"type": "texto", "delta": texto})
-                        await self.emitir({"type": "fin_respuesta", "texto": texto})
+                        await self.responder_directo(
+                            texto,
+                            emitir_inicio=False,
+                        )
                         return
 
                     salida = await ejecutar_tool(tc["name"], args, self.emitir)
