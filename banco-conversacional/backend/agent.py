@@ -74,18 +74,14 @@ def es_consulta_saldo(mensaje: str) -> bool:
     mensaje = mensaje.lower().strip()
 
     expresiones_saldo = [
-        "saldo",
-        "saldo actual",
-        "saldo disponible",
-        "dinero disponible",
-        "cuánto dinero tengo",
-        "cuanto dinero tengo",
-        "cuánto me queda",
-        "cuanto me queda",
-        "cuánto tengo",
-        "cuanto tengo",
-        "cual es mi saldo actual"
-    ]
+    "saldo",
+    "saldo actual",
+    "saldo disponible",
+    "dinero disponible",
+    "cuanto dinero tengo",
+    "cuanto me queda",
+    "cual es mi saldo actual",
+]
 
     return any(expr in mensaje for expr in expresiones_saldo)
 
@@ -93,6 +89,32 @@ def formatear_euros(cantidad: float) -> str:
     texto = f"{cantidad:,.2f}"
     return texto.replace(",", "X").replace(".", ",").replace("X", ".") + " €"
 
+
+
+def limpiar_markdown_respuesta(texto: str) -> str:
+    """
+    Elimina Markdown básico que algunos modelos locales añaden aunque el prompt diga que no.
+    Pensado para respuestas habladas: importes sin **negrita**, sin cursiva y sin bloques.
+    """
+    if not texto:
+        return texto
+
+    # Quita bloques de código ```...```
+    texto = texto.replace("```", "")
+
+    # Quita negritas/cursivas alrededor de texto o importes.
+    texto = texto.replace("**", "")
+    texto = texto.replace("__", "")
+    texto = texto.replace("*", "")
+    texto = texto.replace("_", "")
+
+    # Quita backticks inline.
+    texto = texto.replace("`", "")
+
+    # Arregla espacios raros.
+    texto = re.sub(r"\s+", " ", texto).strip()
+
+    return texto
 
 
 def extraer_peticion_bizum(mensaje: str) -> dict | None:
@@ -264,6 +286,7 @@ class Agente:
         
         
     async def responder_directo(self, texto: str) -> None:
+        texto = limpiar_markdown_respuesta(texto)
         await self.emitir({"type": "inicio_respuesta"})
         await self.emitir({"type": "texto", "delta": texto})
         await self.emitir({"type": "fin_respuesta", "texto": texto})
@@ -339,6 +362,7 @@ class Agente:
                     or f"No se ha podido enviar el Bizum. Respuesta interna: {salida}"
                 )
 
+            texto = limpiar_markdown_respuesta(texto)
             await self.emitir({"type": "texto", "delta": texto})
             await self.emitir({"type": "fin_respuesta", "texto": texto})
             return True
@@ -431,6 +455,7 @@ class Agente:
             else:
                 texto = "No he podido consultar tu saldo ahora mismo."
 
+            texto = limpiar_markdown_respuesta(texto)
             await self.emitir({"type": "texto", "delta": texto})
             await self.emitir({"type": "fin_respuesta", "texto": texto})
             return
@@ -490,6 +515,7 @@ class Agente:
                 # Si no hay herramientas, ahora sí mostramos el texto del LLM.
                 if not tool_calls_locales:
                     texto_iteracion = limpiar_razonamiento(texto_iteracion)
+                    texto_iteracion = limpiar_markdown_respuesta(texto_iteracion)
 
                     # A veces qwen3 devuelve una iteración vacía (sin texto ni
                     # tools), sobre todo tras un tool_result. No se guarda en el
