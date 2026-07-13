@@ -157,33 +157,29 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
     if nombre == "mostrar_grafico":
         spec = entrada.get("spec")
 
+        # Los modelos pequeños a veces serializan la spec como string JSON
+        # en vez de como objeto: se intenta parsear antes de rechazarla.
+        if isinstance(spec, str):
+            try:
+                spec = json.loads(spec)
+            except json.JSONDecodeError as e:
+                return json.dumps({
+                    "error": f"La spec Vega-Lite llegó como string y no es JSON válido: {e}. Reintenta."
+                }, ensure_ascii=False)
+
         if not isinstance(spec, dict):
             return json.dumps({
                 "error": "La spec Vega-Lite no es válida: debe ser un objeto JSON."
             }, ensure_ascii=False)
 
-        if "title" not in spec:
+        # Validación mínima: solo se exige que haya datos inline en algún
+        # nivel. title/mark/encoding pueden vivir dentro de layer/hconcat/
+        # vconcat, así que exigirlos en la raíz rechazaría specs válidas.
+        # Si la spec tiene otros defectos, vega-embed lo notifica en la UI.
+        if not _tiene_datos_inline(spec):
             return json.dumps({
-                "error": "La spec Vega-Lite no es válida: falta title."
-            }, ensure_ascii=False)
-
-        if (
-            not isinstance(spec.get("data"), dict)
-            or "values" not in spec["data"]
-            or not isinstance(spec["data"]["values"], list)
-        ):
-            return json.dumps({
-                "error": "La spec Vega-Lite no es válida: debe incluir data.values como lista."
-            }, ensure_ascii=False)
-
-        if "mark" not in spec:
-            return json.dumps({
-                "error": "La spec Vega-Lite no es válida: falta mark."
-            }, ensure_ascii=False)
-
-        if "encoding" not in spec:
-            return json.dumps({
-                "error": "La spec Vega-Lite no es válida: falta encoding."
+                "error": "La spec Vega-Lite no incluye datos: añade data.values "
+                         "(lista no vacía) con los datos reales de la consulta."
             }, ensure_ascii=False)
 
         await emitir({
@@ -196,13 +192,25 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
             "estado": "ok",
             "detalle": "Gráfico mostrado al usuario en pantalla."
         }, ensure_ascii=False)
-            
-            
-        await emitir({
-            "type": "grafico",
-            "spec": spec,
-            "razonamiento": entrada.get("razonamiento", ""),
-        })
-        return json.dumps({"estado": "ok", "detalle": "Gráfico mostrado al usuario en pantalla."})
 
     return json.dumps({"error": f"Herramienta desconocida: {nombre}"})
+
+
+def _tiene_datos_inline(spec: dict) -> bool:
+    """True si la spec (o alguna de sus vistas anidadas) trae data.values no vacío."""
+    data = spec.get("data")
+    if isinstance(data, dict) and isinstance(data.get("values"), list) and data["values"]:
+        return True
+
+    for clave in ("layer", "hconcat", "vconcat", "concat"):
+        hijos = spec.get(clave)
+        if isinstance(hijos, list) and any(
+            isinstance(h, dict) and _tiene_datos_inline(h) for h in hijos
+        ):
+            return True
+
+    # facet / repeat envuelven la vista real en spec.spec
+    if isinstance(spec.get("spec"), dict):
+        return _tiene_datos_inline(spec["spec"])
+
+    return False

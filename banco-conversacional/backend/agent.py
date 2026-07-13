@@ -567,14 +567,29 @@ class Agente:
                             idx = tool_call.index
 
                             if idx not in tool_calls_locales:
-                                tool_calls_locales[idx] = {
-                                    "id": tool_call.id,
-                                    "name": tool_call.function.name,
-                                    "arguments": "",
-                                }
+                                tool_calls_locales[idx] = {"id": None, "name": None, "arguments": ""}
 
-                            if tool_call.function.arguments:
-                                tool_calls_locales[idx]["arguments"] += tool_call.function.arguments
+                            # id y name pueden llegar en cualquier chunk (o solo en
+                            # el primero); se guardan en cuanto aparezcan y nunca
+                            # se machacan con None.
+                            tc_local = tool_calls_locales[idx]
+                            if tool_call.id:
+                                tc_local["id"] = tool_call.id
+                            if tool_call.function:
+                                if tool_call.function.name:
+                                    tc_local["name"] = tool_call.function.name
+                                if tool_call.function.arguments:
+                                    tc_local["arguments"] += tool_call.function.arguments
+
+                # Saneado post-stream: sin name no hay nada que ejecutar (se
+                # descarta el tool call incompleto); sin id, se genera uno
+                # sintético para que el historial siga siendo válido.
+                tool_calls_locales = {
+                    idx: tc for idx, tc in tool_calls_locales.items() if tc["name"]
+                }
+                for idx, tc in tool_calls_locales.items():
+                    if not tc["id"]:
+                        tc["id"] = f"call_{idx}"
 
                 # Si no hay herramientas, ahora sí mostramos el texto del LLM.
                 if not tool_calls_locales:
@@ -743,5 +758,17 @@ class Agente:
 
         except Exception as e:
             await self.emitir({"type": "error", "detalle": str(e)})
+            await self.emitir({"type": "fin_respuesta", "texto": ""})
+            return
+
+        # Bucle agotado sin respuesta final (todas las iteraciones acabaron en
+        # tool calls): mejor un mensaje honesto que una burbuja vacía.
+        if not texto_final.strip():
+            texto_final = (
+                "No he conseguido completar la respuesta. "
+                "¿Puedes reformular la pregunta?"
+            )
+            self.historial.append({"role": "assistant", "content": texto_final})
+            await self.emitir({"type": "texto", "delta": texto_final})
 
         await self.emitir({"type": "fin_respuesta", "texto": texto_final.strip()})

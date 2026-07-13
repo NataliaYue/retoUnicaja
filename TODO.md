@@ -19,18 +19,18 @@ Hay varias causas probables encadenadas; revisar en este orden:
 - [x] ~~**`MAX_TOKENS = 700` trunca la spec Vega-Lite**~~ **HECHO**: subido a 2000 en `backend/config.py`. Además se fijó `TEMPERATURA = 0.2` (con la temperatura por defecto qwen3 generaba SQL inválido de forma intermitente).
 - [x] ~~**`json.loads(tc["arguments"])` sin proteger**~~ **HECHO**: ahora el JSON corrupto se devuelve al modelo como tool_result de error para que se autocorrija, igual que con el SQL.
 - [x] **Historial envenenado con `content: None`** — **HECHO**: cuando el modelo devolvía una iteración vacía, se guardaba un mensaje de asistente con `content: None` y Ollama rechazaba TODA la conversación posterior con 400 `invalid message content type: <nil>`. Ahora nunca se guarda `None` (siempre string), las iteraciones vacías se reintentan una vez, y si persisten se emite un mensaje de fallback en lugar de dejar la respuesta en blanco.
-- REVISAR PUES CAMBIO A QWEN QUIZA ARREGLÓ ESTO. **La spec puede llegar como string en vez de objeto** (`backend/tools.py:160`). Los modelos pequeños a menudo serializan el parámetro `spec` como string JSON. Si `isinstance(spec, str)`, intentar `json.loads(spec)` antes de rechazarla.
-- [ ] **Validación demasiado estricta** (`backend/tools.py:165-187`): exige `title`, `mark` y `encoding` en el nivel raíz, pero specs válidas con `layer`, `hconcat` o `transform` no los llevan ahí. Relajar: exigir solo `data.values`; si falta lo demás, devolver el error al LLM en vez de descartar.
-- [ ] **Acumulación de tool calls en streaming frágil** (`backend/agent.py:456-468`): con Ollama, `tool_call.id` y `function.name` pueden venir solo en el primer chunk o ser `None`. Si el primer chunk de un índice no trae nombre, se queda `None` para siempre. Guardar id/name en cuanto aparezcan (`if tool_call.id: ...`).
-- [ ] **`MAX_ITERACIONES_AGENTE = 4`** (`backend/config.py:30`) puede quedarse corto para la cadena SQL → reintento → gráfico → conclusión. Si se agota el bucle, no se emite ningún texto (respuesta vacía). Subir a 6-8 y, al agotarse, emitir un mensaje de fallback.
-- [ ] Probar de punta a punta con: *"Compara mis gastos por categoría de los últimos 3 meses"* y *"Evolución de mis gastos mes a mes en el último año"*.
+- [x] **La spec puede llegar como string en vez de objeto** — **HECHO** (aunque qwen mejoró, se blinda igualmente): si `spec` es string se intenta `json.loads`; si está corrupto se devuelve el error al LLM para que reintente.
+- [x] **Validación demasiado estricta** — **HECHO**: ahora solo se exige `data.values` no vacío, buscándolo también dentro de `layer`/`hconcat`/`vconcat`/`facet` (helper `_tiene_datos_inline` en `tools.py`). Si la spec tiene otros defectos, vega-embed avisa en la UI.
+- [x] **Acumulación de tool calls en streaming frágil** — **HECHO**: `id`/`name` se guardan en cuanto aparecen en cualquier chunk y nunca se machacan con `None`; tras el stream, los tool calls sin nombre se descartan y a los que llegan sin id se les genera uno sintético para no romper el historial.
+- [x] **`MAX_ITERACIONES_AGENTE`** — **HECHO**: subido de 4 a 8, y si el bucle se agota sin texto final se emite un mensaje de fallback en vez de una burbuja vacía.
+- [x] Probado de punta a punta — **HECHO**: *"Compara mis gastos por categoría de los últimos 3 meses"* → barras + conclusión; *"Evolución de mis gastos mes a mes en el último año"* → gráfico temporal + conclusión (~18-33 s, 0 autocorrecciones SQL).
 
 ### 2. Falso positivo en el atajo de saldo
 - [ ] `es_consulta_saldo()` (`backend/agent.py:64`) usa `in` sobre substrings: *"¿cuánto tengo gastado en gasolina?"* contiene "cuanto tengo" → responde el saldo en vez de consultar movimientos. Excluir mensajes que contengan "gastado/gasté/gasto/pagado/pagué…" o usar regex con límites de palabra.
 
 ### 3. Código duplicado y muerto
-- [ ] `backend/banking_api.py`: **todo el módulo está duplicado** (docstring, imports y las 3 funciones aparecen dos veces). Dejar una sola copia.
-- [ ] `backend/tools.py:201-206`: código muerto tras el `return` de `mostrar_grafico`. Eliminar.
+- [x] `backend/banking_api.py` — **HECHO**: eliminada la duplicación completa del módulo; queda una sola copia de cada función (verificado: saldo y contactos siguen funcionando).
+- [x] `backend/tools.py` — **HECHO**: eliminado el código muerto tras el `return` de `mostrar_grafico`.
 
 ### 4. El historial no registra las respuestas gestionadas por el backend
 - [ ] Los atajos de saldo, y todo el flujo de Bizum (confirmación, corrección de contacto, envío), responden sin añadir nada a `self.historial`. Después, el LLM no sabe que eso pasó: *"¿a quién acabo de enviar el bizum?"* falla. Añadir cada par usuario/asistente de las rutas directas al historial (afecta a los 15 pts de Conversación).

@@ -33,7 +33,9 @@ MAX_TOKENS = 2000
 TEMPERATURA = 0.2
 
 # evita que el agente entre en bucles infinitos llamando herramientas repetidamente.
-MAX_ITERACIONES_AGENTE =  4 #8  
+# La cadena típica ya son 3 (SQL → gráfico → conclusión); con reintentos de
+# autocorrección de SQL o de JSON corrupto hacen falta más.
+MAX_ITERACIONES_AGENTE = 8
 
 #===========================================================================
 # configuración Base de datos
