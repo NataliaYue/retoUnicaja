@@ -1,0 +1,67 @@
+{
+  "banco-conversacional/backend/__init__.py": {
+    "mtime": 1783670645.1036,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "banco-conversacional/backend/agent.py": {
+    "mtime": 1783947020.4557867,
+    "ast_hash": "20e94170b87a718082fe17efe7e56924",
+    "semantic_hash": "20e94170b87a718082fe17efe7e56924"
+  },
+  "banco-conversacional/backend/banking_api.py": {
+    "mtime": 1783946897.411619,
+    "ast_hash": "8582f546419624e95af1fe7c5dd85788",
+    "semantic_hash": "8582f546419624e95af1fe7c5dd85788"
+  },
+  "banco-conversacional/backend/config.py": {
+    "mtime": 1783947014.898998,
+    "ast_hash": "25c51d23de056cac11087cd5e504f941",
+    "semantic_hash": "25c51d23de056cac11087cd5e504f941"
+  },
+  "banco-conversacional/backend/database.py": {
+    "mtime": 1783670645.1037896,
+    "ast_hash": "07467b6b98df48b7c5c6cf2c0c530ea6",
+    "semantic_hash": "07467b6b98df48b7c5c6cf2c0c530ea6"
+  },
+  "banco-conversacional/backend/main.py": {
+    "mtime": 1783670645.1037896,
+    "ast_hash": "08886afd907108054ed2324de77a449e",
+    "semantic_hash": "08886afd907108054ed2324de77a449e"
+  },
+  "banco-conversacional/backend/seed.py": {
+    "mtime": 1783670645.1037896,
+    "ast_hash": "722751104b7dc257cf290ba335d1f161",
+    "semantic_hash": "722751104b7dc257cf290ba335d1f161"
+  },
+  "banco-conversacional/backend/tools.py": {
+    "mtime": 1783946941.2995791,
+    "ast_hash": "ab157983f85246bd2284d3ae25f3d46d",
+    "semantic_hash": "ab157983f85246bd2284d3ae25f3d46d"
+  },
+  "README.md": {
+    "mtime": 1783670645.1019168,
+    "ast_hash": "83250fc9242799d798cf515ae4df9a01",
+    "semantic_hash": "83250fc9242799d798cf515ae4df9a01"
+  },
+  "TODO.md": {
+    "mtime": 1783947194.2287276,
+    "ast_hash": "7c33b9cc40f5931f8e02a23143a12498",
+    "semantic_hash": "7c33b9cc40f5931f8e02a23143a12498"
+  },
+  "banco-conversacional/README.md": {
+    "mtime": 1783670645.1036,
+    "ast_hash": "c1771f0f71edef2a6c6228dfd68fca9e",
+    "semantic_hash": "c1771f0f71edef2a6c6228dfd68fca9e"
+  },
+  "banco-conversacional/frontend/index.html": {
+    "mtime": 1783670645.1037896,
+    "ast_hash": "def541efdadf3574346a8d91fce4e3af",
+    "semantic_hash": "def541efdadf3574346a8d91fce4e3af"
+  },
+  "banco-conversacional/requirements.txt": {
+    "mtime": 1783670645.1037896,
+    "ast_hash": "fd7501893e0610f33c22d52815ed3908",
+    "semantic_hash": "fd7501893e0610f33c22d52815ed3908"
+  }
+}
