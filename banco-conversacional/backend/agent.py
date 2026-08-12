@@ -154,6 +154,14 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
             r"(?:por\s+)?bizum\s+a\s+"
             r"(?P<destinatario>.+?)$"
         ),
+        
+        (
+            r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
+            r"(?:un\s+)?bizum\s+(?:de|por)\s+"
+            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
+            r"(?P<destinatario>.+?)$"
+        ),
+        
     ]
 
     for patron in patrones:
@@ -389,57 +397,67 @@ class Agente:
     
     async def gestionar_bizum_pendiente(self, mensaje_usuario: str) -> bool:
         """
-        Si hay un Bizum pendiente, este método decide si el usuario
-        confirma, cancela o responde de forma ambigua.
-
-        Devuelve True si el mensaje ya se ha gestionado.
-        Devuelve False si no había Bizum pendiente.
+        Si hay un Bizum pendiente, el chat solo acepta cancelarlo.
+        La confirmación real se hace por websocket con el PIN.
         """
         if not self.bizum_pendiente:
             return False
 
-        if es_confirmacion_bizum(mensaje_usuario):
-            pendiente = self.bizum_pendiente
-            self.bizum_pendiente = None
-            pendiente["confirmado"] = True
-
-            await self.emitir({"type": "inicio_respuesta"})
-
-            salida_json = await ejecutar_tool("enviar_bizum", pendiente, self.emitir)
-            salida = json.loads(salida_json)
-
-            if salida.get("estado") == "ok":
-                texto = (
-                    f"Bizum enviado correctamente a {salida['destinatario']} "
-                    f"por {formatear_euros(salida['cantidad'])}. "
-                    f"Tu nuevo saldo es {formatear_euros(salida['nuevo_saldo'])}."
-                )
-            else:
-                texto = (
-                    salida.get("motivo")
-                    or salida.get("error")
-                    or f"No se ha podido enviar el Bizum. Respuesta interna: {salida}"
-                )
-
-            await self.responder_directo(
-                texto,
-                emitir_inicio=False,
-            )
-            return True
-
         if es_cancelacion_bizum(mensaje_usuario):
             self.bizum_pendiente = None
-            await self.responder_directo("De acuerdo, cancelo el Bizum.")
+            await self.responder_directo("De acuerdo, cancelo el Bizum. No se ha enviado nada.")
             return True
 
+        # Si escribe otra cosa, le recordamos que use la interfaz segura o cancele.
         texto = (
-            "Tengo un Bizum pendiente. Respóndeme con una confirmación clara, "
-            "por ejemplo “sí, confirmo”, o dime “no” para cancelarlo."
+            "Tienes un Bizum pendiente. Por favor, introduce tu PIN en el panel de seguridad "
+            "o escribe 'cancela' si prefieres anularlo."
         )
         await self.responder_directo(texto)
         return True
     
     
+    async def validar_pin_bizum(self, pin: str) -> None:
+        """Valida el PIN introducido de forma segura y ejecuta el Bizum si es correcto."""
+        if not self.bizum_pendiente:
+            await self.responder_directo("No hay ningún envío de Bizum pendiente.")
+            return
+
+        # Simulación de PIN correcto (en un entorno real, cruzar con la BD)
+        PIN_CORRECTO = "1234"
+
+        if pin != PIN_CORRECTO:
+            self.bizum_pendiente = None
+            await self.responder_directo("PIN incorrecto. Por tu seguridad, se ha cancelado el envío.")
+            return
+
+        # Si el PIN es correcto, procedemos a ejecutar la herramienta
+        pendiente = self.bizum_pendiente
+        self.bizum_pendiente = None
+        pendiente["confirmado"] = True
+
+        await self.emitir({"type": "inicio_respuesta"})
+
+        # Ejecutamos la herramienta con los datos confirmados
+        salida_json = await ejecutar_tool("enviar_bizum", pendiente, self.emitir)
+        salida = json.loads(salida_json)
+
+        if salida.get("estado") == "ok":
+            texto = (
+                f"Bizum enviado correctamente a {salida['destinatario']} "
+                f"por {formatear_euros(salida['cantidad'])}. "
+                f"Tu nuevo saldo es {formatear_euros(salida['nuevo_saldo'])}."
+            )
+        else:
+            texto = (
+                salida.get("motivo")
+                or salida.get("error")
+                or f"No se ha podido enviar el Bizum. Respuesta interna: {salida}"
+            )
+
+        await self.responder_directo(texto, emitir_inicio=False)
+    
+
     async def preparar_bizum_desde_backend(self, datos: dict) -> None:
         destinatario_original = datos.get("destinatario", "").strip()
         cantidad = round(float(datos.get("cantidad", 0)), 2)
@@ -483,10 +501,13 @@ class Agente:
 
         texto = (
             f"Vas a enviar {formatear_euros(cantidad)} "
-            f"a {destinatario}. ¿Confirmas el envío?"
+            f"a {destinatario}. Por favor, introduce tu PIN de seguridad para confirmar el envío."
         )
 
         await self.responder_directo(texto)
+        
+        # Le enviamos la señal al frontend para que despliegue el teclado numérico / modal de PIN
+        await self.emitir({"type": "pedir_pin"})
     
     
     async def procesar(self, mensaje_usuario: str) -> None:
@@ -653,7 +674,33 @@ class Agente:
 
                     if tc["name"] == "enviar_bizum":
                         destinatario = args.get("destinatario", "").strip()
-                        cantidad = round(float(args.get("cantidad", 0)), 2)
+                        raw_cantidad = args.get("cantidad")
+                        try:
+                            # Protegemos frente a null, strings vacíos o textos
+                            if raw_cantidad is None or raw_cantidad == "":
+                                cantidad = 0.0
+                            else:
+                                cantidad = round(float(raw_cantidad), 2)
+                        except (ValueError, TypeError):
+                            cantidad = 0.0
+
+                        if cantidad <= 0:
+                            texto = f"¿Cuánto dinero quieres enviarle a {destinatario}?"
+                            
+                            # Registramos el fallo como respuesta de la herramienta para que 
+                            # el LLM entienda el contexto en el siguiente turno.
+                            self.historial.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "name": tc["name"],
+                                "content": json.dumps({
+                                    "estado": "error",
+                                    "motivo": "Falta la cantidad. Se le ha preguntado al usuario."
+                                }, ensure_ascii=False),
+                            })
+                            
+                            await self.responder_directo(texto, emitir_inicio=False)
+                            return
                         concepto = args.get("concepto", "").strip()
 
                         validacion = buscar_contacto_bizum(destinatario)
@@ -724,9 +771,10 @@ class Agente:
                             "concepto": concepto,
                         }
 
+                        # MODIFICADO: Mismo texto que en el atajo rápido
                         texto = (
                             f"Vas a enviar {formatear_euros(cantidad)} "
-                            f"a {destinatario}. ¿Confirmas el envío?"
+                            f"a {destinatario}. Por favor, introduce tu PIN de seguridad para confirmar el envío."
                         )
 
                         self.historial.append({
@@ -745,6 +793,10 @@ class Agente:
                             texto,
                             emitir_inicio=False,
                         )
+                        
+                        # NUEVO: Enviamos la señal al frontend para abrir el teclado
+                        await self.emitir({"type": "pedir_pin"})
+                        
                         return
 
                     salida = await ejecutar_tool(tc["name"], args, self.emitir)

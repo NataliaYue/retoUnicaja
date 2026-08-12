@@ -33,7 +33,30 @@
     font-family:'Manrope',system-ui,sans-serif; font-size:15px; line-height:1.55;
     display:flex; flex-direction:column;
   }
-
+/* ── Pantalla de Login ───────────────────────────────── */
+  #login-pantalla {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: var(--fondo);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 2000; transition: opacity 0.3s;
+  }
+  #login-pantalla.oculto {
+    opacity: 0; pointer-events: none;
+  }
+  
+  .login-caja {
+    background: var(--superficie); padding: 40px 30px; 
+    border-radius: 20px; box-shadow: var(--sombra);
+    width: 340px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .login-caja h2 { margin: 0; color: var(--tinta); font-size: 20px; text-align: center; }
+  .login-caja p { margin: 0 0 10px 0; color: var(--tinta-suave); font-size: 14px; text-align: center; }
+  
+  .login-caja input {
+    padding: 14px; border: 1px solid var(--linea); border-radius: 8px;
+    font-family: inherit; font-size: 15px; outline: none;
+  }
+  .login-caja input:focus { border-color: var(--verde); }
   /* ── Cabecera ─────────────────────────────────────────── */
   header{
     display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -122,9 +145,72 @@
 
   button:focus-visible, input:focus-visible, summary:focus-visible{outline:2px solid var(--verde); outline-offset:2px}
   @media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important} }
+
+
+  /* ── Teclado de Seguridad ─────────────────────────────── */
+  #pin-modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(23, 33, 27, 0.8);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 1000; opacity: 1; transition: opacity 0.2s;
+  }
+  #pin-modal.oculto { display: none; opacity: 0; }
+
+  .pin-container {
+    background: var(--superficie); padding: 24px; border-radius: 20px;
+    text-align: center; width: 320px; box-shadow: var(--sombra);
+  }
+  .pin-container h3 { margin: 0 0 4px 0; color: var(--verde); font-family: 'Fraunces', serif; }
+  .pin-container p { margin: 0 0 20px 0; color: var(--tinta-suave); font-size: 13px; }
+
+  #pin-display {
+    font-size: 32px; letter-spacing: 16px; text-align: center; width: 100%;
+    margin-bottom: 24px; padding: 12px; box-sizing: border-box;
+    border: 1px solid var(--linea); border-radius: 12px;
+    background: var(--fondo); color: var(--tinta); outline: none;
+  }
+
+  .teclado-numerico { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  
+  .btn-num {
+    padding: 16px; font-size: 22px; font-weight: 600; font-family: inherit;
+    border: 1px solid var(--linea); border-radius: 12px;
+    background: var(--superficie); color: var(--tinta); cursor: pointer;
+    transition: background 0.1s, transform 0.1s;
+  }
+  .btn-num:active { transform: scale(0.95); background: var(--verde-claro); }
+  .btn-verde { background: var(--verde); color: #fff; border: none; }
+  .btn-rojo { background: var(--rojo); color: #fff; border: none; }
+
+  #btn-cancelar-pin {
+    background: none; border: none; color: var(--tinta-suave); font-family: inherit;
+    font-size: 13px; text-decoration: underline; cursor: pointer;
+  }
+  #btn-cancelar-pin:hover { color: var(--rojo); }
+
 </style>
 </head>
 <body>
+
+<!-- Pantalla de Inicio de Sesión -->
+<div id="login-pantalla">
+  <div class="login-caja">
+    <div class="marca" style="justify-content: center; margin-bottom: 20px;">
+      <h1>Habla con tu dinero</h1>
+    </div>
+    <h2>Acceso Clientes</h2>
+    <p>Por favor, identifícate para continuar.</p>
+    
+    <input type="text" id="login-usuario" placeholder="Usuario o DNI" autocomplete="off">
+    <!-- Placeholder limpio, sin la contraseña -->
+    <input type="password" id="login-pass" placeholder="Contraseña">
+    
+    <button class="btn-verde" style="width: 100%; padding: 12px; border-radius: 8px; font-size: 16px; margin-top: 10px;" onclick="iniciarSesion()">Entrar</button>
+    
+    <!-- Mensaje de error genérico, sin pistas -->
+    <p id="login-error" class="aviso-error oculto" style="margin-top: 15px; text-align: center;">Usuario o contraseña incorrectos.</p>
+  </div>
+</div>
 
 <header>
   <div class="marca">
@@ -157,6 +243,33 @@
   <div class="pie">Entorno de demostración con datos ficticios · El asistente pide confirmación antes de cualquier envío de dinero</div>
 </footer>
 
+<!-- Modal del Teclado de Seguridad -->
+<div id="pin-modal" class="oculto">
+    <div class="pin-container">
+        <h3>Introduce tu PIN</h3>
+        <p>Confirmación de operación</p>
+        
+        <input type="password" id="pin-display" readonly maxlength="4" placeholder="****">
+        
+        <div class="teclado-numerico">
+            <button class="btn-num" onclick="addPin('1')">1</button>
+            <button class="btn-num" onclick="addPin('2')">2</button>
+            <button class="btn-num" onclick="addPin('3')">3</button>
+            <button class="btn-num" onclick="addPin('4')">4</button>
+            <button class="btn-num" onclick="addPin('5')">5</button>
+            <button class="btn-num" onclick="addPin('6')">6</button>
+            <button class="btn-num" onclick="addPin('7')">7</button>
+            <button class="btn-num" onclick="addPin('8')">8</button>
+            <button class="btn-num" onclick="addPin('9')">9</button>
+            <button class="btn-num btn-rojo" onclick="clearPin()">C</button>
+            <button class="btn-num" onclick="addPin('0')">0</button>
+            <button class="btn-num btn-verde" onclick="sendPin()">OK</button>
+        </div>
+        <button id="btn-cancelar-pin" onclick="cancelarPin()">Cancelar operación</button>
+    </div>
+</div>
+
+
 <script>
 /* =====================================================================
    Cliente del asistente.
@@ -183,7 +296,34 @@ function conectar(){
   ws.onmessage = (e) => manejarEvento(JSON.parse(e.data));
   ws.onclose = () => setTimeout(conectar, 1000); // reconexión automática
 }
-conectar();
+//conectar();
+
+/* ── Lógica de Inicio de Sesión ────────────────────────────────────── */
+function iniciarSesion() {
+  const usuario = document.getElementById('login-usuario').value.trim();
+  const pass = document.getElementById('login-pass').value.trim();
+  const msjError = document.getElementById('login-error');
+
+  if (usuario === "" || pass === "") {
+    msjError.textContent = "Por favor, rellena ambos campos.";
+    msjError.classList.remove('oculto');
+    return;
+  }
+
+  // Simulamos la validación en el frontend para el reto
+  if (pass === "1234") {
+    // Ocultamos la pantalla de login
+    document.getElementById('login-pantalla').classList.add('oculto');
+    
+    // AHORA conectamos el WebSocket y el asistente arranca
+    conectar();
+  }
+}
+
+// Permitir pulsar "Enter" en el input de contraseña para entrar
+document.getElementById('login-pass').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') iniciarSesion();
+});
 
 function enviar(texto){
   texto = (texto || input.value).trim();
@@ -213,6 +353,11 @@ function manejarEvento(ev){
       bloqueActual.appendChild(burbujaActual);
       chat.appendChild(bloqueActual);
       break;
+
+    case 'pedir_pin':
+      document.getElementById('pin-modal').classList.remove('oculto');
+      document.getElementById('pin-display').value = '';
+      break;  
 
     case 'texto': // streaming token a token
       if (burbujaActual) burbujaActual.textContent += ev.delta;
@@ -282,6 +427,8 @@ function manejarEvento(ev){
       bajar();
       break;
     }
+
+
   }
 }
 
@@ -346,6 +493,39 @@ document.getElementById('sugerencias').addEventListener('click', (e) => {
 });
 function bajar(){ chat.parentElement.scrollTop = chat.parentElement.scrollHeight; }
 function escapar(s){ const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+
+/* ── 4. Lógica del Teclado de Seguridad ────────────────────────────── */
+let currentPin = '';
+
+function addPin(num) {
+  if (currentPin.length < 4) {
+    currentPin += num;
+    document.getElementById('pin-display').value = currentPin;
+  }
+}
+
+function clearPin() {
+  currentPin = '';
+  document.getElementById('pin-display').value = '';
+}
+
+function sendPin() {
+  if (currentPin.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
+    // Ocultar modal y enviar payload de seguridad
+    document.getElementById('pin-modal').classList.add('oculto');
+    ws.send(JSON.stringify({ type: 'auth_bizum', pin: currentPin }));
+    currentPin = '';
+  }
+}
+
+function cancelarPin() {
+  document.getElementById('pin-modal').classList.add('oculto');
+  currentPin = '';
+  // Enviar mensaje de cancelación normal por el chat
+  enviar('cancela');
+}
+
 </script>
 </body>
 </html>

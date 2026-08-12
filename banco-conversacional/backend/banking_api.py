@@ -52,11 +52,6 @@ def api_listar_contactos_bizum() -> dict:
 def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> dict:
     """
     POST /api/v1/bizum/enviar (ficticio).
-
-    Validaciones de negocio (las mismas que haría el banco real):
-    - Importe dentro de los límites de Bizum (0,50 € – 1.000 €).
-    - Saldo suficiente.
-    Si todo es correcto: descuenta el saldo y registra el movimiento.
     """
     if not destinatario or not destinatario.strip():
         return {"estado": "error", "motivo": "Falta el destinatario."}
@@ -68,7 +63,29 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
             "motivo": "El importe de un Bizum debe estar entre 0,50 € y 1.000 €.",
         }
 
+    LIMITE_DIARIO_BOT = 500.00  # Límite de seguridad del asistente
+
     with conexion_escritura() as conn:
+        # 1. Comprobar el límite diario acumulado
+        hoy = date.today().isoformat()
+        
+        # Como los gastos se guardan en negativo, sumamos y cambiamos el signo
+        fila_gastado = conn.execute(
+            "SELECT SUM(importe) as total_hoy FROM movimientos "
+            "WHERE categoria = 'bizum_enviado' AND fecha = ?",
+            (hoy,)
+        ).fetchone()
+        
+        # Si no hay envíos hoy, será None. Si los hay, será un número negativo.
+        gastado_hoy = abs(fila_gastado["total_hoy"] or 0.0)
+
+        if gastado_hoy + cantidad > LIMITE_DIARIO_BOT:
+            return {
+                "estado": "error",
+                "motivo": f"Operación denegada. El límite diario del asistente es {LIMITE_DIARIO_BOT:.2f} € y ya has enviado {gastado_hoy:.2f} € hoy."
+            }
+
+        # 2. Comprobar saldo suficiente
         saldo = conn.execute("SELECT saldo FROM cliente WHERE id = 1").fetchone()["saldo"]
         if saldo < cantidad:
             return {
@@ -76,13 +93,14 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
                 "motivo": f"Saldo insuficiente: el saldo actual es {saldo:.2f} € y el envío es de {cantidad:.2f} €.",
             }
 
+        # 3. Ejecutar el movimiento
         nuevo_saldo = round(saldo - cantidad, 2)
         conn.execute("UPDATE cliente SET saldo = ? WHERE id = 1", (nuevo_saldo,))
         conn.execute(
             "INSERT INTO movimientos (fecha, importe, categoria, comercio, descripcion) "
             "VALUES (?,?,?,?,?)",
             (
-                date.today().isoformat(),
+                hoy,
                 -cantidad,
                 "bizum_enviado",
                 destinatario.strip(),

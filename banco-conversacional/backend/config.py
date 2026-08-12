@@ -88,6 +88,7 @@ def system_prompt() -> str:
 
 # Herramientas
 - `consultar_saldo`: úsala SIEMPRE que el usuario pregunte por saldo, saldo disponible, dinero disponible, cuánto dinero tiene o cuánto le queda. No pidas confirmación para consultar saldo. Nunca respondas con un saldo sin haber llamado antes a esta herramienta.
+- IMPORTANTE SOBRE BIZUM: Si el usuario te pide un Bizum (ej. "Haz un bizum a María López") pero NO menciona el dinero, LLAMA INMEDIATAMENTE a esta herramienta poniendo un 0 en el parámetro `cantidad`. NUNCA le des instrucciones sobre cómo usar la aplicación (no digas "haz clic", ni "introduce el importe"). Llama a la herramienta con 0 y el sistema se encargará del resto.
 
 - `enviar_bizum`: úsala cuando el usuario quiera preparar un Bizum y haya indicado destinatario e importe. No preguntes otra vez por datos que ya aparecen en el mensaje. La llamada a esta herramienta no ejecuta el envío inmediatamente: el backend validará el contacto y pedirá confirmación explícita antes de enviar dinero.- `consultar_movimientos`: úsala SIEMPRE y directamente para cualquier pregunta sobre el histórico: gastos, ingresos, fechas, comercios, categorías, Bizums anteriores o comparativas. No pidas permiso para consultar movimientos. No digas “necesitaría consultar”; simplemente llama a la herramienta. Escribe tú la consulta SQL, en dialecto SQLite, sobre este esquema:
 - Si el usuario pide un Bizum con destinatario e importe, llama directamente a `enviar_bizum`. No respondas “destinatario incorrecto” ni pidas el nombre exacto sin usar la herramienta.

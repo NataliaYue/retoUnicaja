@@ -35,7 +35,7 @@ Abre **http://localhost:8000** (Chrome recomendado: el reconocimiento de voz del
 ┌───────────────┴─────────────────── BACKEND (FastAPI) ───────────────────────────┐
 │                                                                                  │
 │   main.py ──▶ agent.py  «bucle agéntico»                                         │
-│               │   LLM (Claude) + historial de conversación + streaming           │
+│               │   LLM (Ollama / Qwen3) + historial de conversación + streaming   │
 │               │                                                                  │
 │               ▼ tool calling (tools.py)                                          │
 │   ┌────────────────┬──────────────────┬─────────────────────┬────────────────┐  │
@@ -134,7 +134,7 @@ Cliente → servidor: `{"mensaje": "texto del usuario"}`.
 | Criterio | Pts | Dónde se gana en este proyecto |
 |---|---|---|
 | Conversación | 15 | Historial completo por sesión (seguimientos, confirmaciones), system prompt con estilo natural en español |
-| Agilidad | 15 | Streaming token a token por WebSocket + modelo rápido (Haiku) + voz local sin latencia de red |
+| Agilidad | 15 | Streaming token a token por WebSocket + modelo local rápido (Ollama/Qwen3) + voz local sin latencia de red |
 | Operaciones | 10 | `banking_api.py` como APIs ficticias invocadas vía *skills* (tools), con validaciones y confirmación de Bizum |
 | Consultas NL→SQL | 30 | Esquema en el prompt, recetas de fechas, ejecución segura de solo lectura, autocorrección ante errores |
 | Lógica visual | 10 | La IA decide el tipo de gráfico y su `razonamiento` se muestra en pantalla |
@@ -181,8 +181,15 @@ banco-conversacional/
     └── index.html         ← chat, voz (Web Speech API) y render Vega-Lite (sin build, sin npm)
 ```
 
-**Reparto sugerido para 2 personas:** Persona A → `agent.py`, `tools.py`, `config.py` (calidad del prompt y precisión SQL, donde están los puntos). Persona B → `index.html` (UX, voz, gráficos), vídeo y memoria. `seed.py` y `banking_api.py` casi no necesitan tocarse.
+## 8. 🛡️ Capa de Seguridad y Autenticación (Nuevas Features)
 
+Para acercar el asistente a los estándares reales de la banca y garantizar un entorno seguro, se ha implementado una arquitectura de defensa en profundidad:
+
+*   **Autenticación Inicial (Login):** La interfaz está bloqueada por defecto. La conexión WebSocket con el servidor (y por tanto, la instanciación del agente LLM) no se establece hasta que el usuario se identifica correctamente en el frontend.
+*   **Cierre de sesión por inactividad (Timeout):** El backend monitoriza el flujo de mensajes. Si transcurren 5 minutos sin interacción, el servidor cierra automáticamente el WebSocket, destruyendo el historial y la sesión del agente.
+*   **Step-up Authentication (Teclado Seguro):** Las operaciones críticas (como enviar un Bizum) no se pueden confirmar mediante texto libre en el chat. El backend envía una señal que despliega un teclado numérico virtual en pantalla para solicitar el PIN de operaciones.
+*   **Privacidad Zero-Knowledge (El LLM no memoriza claves):** El PIN introducido viaja por el WebSocket bajo un tipo de evento distinto (`auth_bizum`). El código Python intercepta este evento y lo valida contra la base de datos de forma nativa. **La contraseña jamás se añade al historial de la conversación ni es leída por la IA**.
+*   **Límites de riesgo (Control de fraude):** Se ha establecido un límite de seguridad estricto para las operaciones mediante el chatbot (500 € diarios). El backend suma en tiempo real los movimientos del día y bloquea la operación si se supera este umbral, previniendo el vaciado de cuentas en caso de sesión desatendida.
 ---
 
 *Proyecto de demostración con datos 100% ficticios. Ninguna operación afecta a dinero real.*
