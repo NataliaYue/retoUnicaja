@@ -1,95 +1,191 @@
-# TODO — Reto IA Unicaja & UGR (Asistente bancario conversacional)
+# TODO — Reto 2: Analítica Avanzada y Generative UI
 
-NATALIA: P0->2,4
+**Cátedra IA Responsable en Finanzas** (Unicaja & UGR, con NVIDIA) · https://catedraiaunicaja.ugr.es/reto2.html
 
-PABLO REYES:P0->6,7
+## Baremo oficial
 
-PIGUE:P0->1,3
+| Criterio | Pts |
+|---|---|
+| Precisión de consultas | **30** |
+| Conversación | 15 |
+| Agilidad | 15 |
+| Operaciones | 10 |
+| Lógica visual | 10 |
+| Gráficos sin plantillas | 10 |
+| Vídeo | 5 |
+| Memoria | 5 |
 
-Baremo del reto (100 pts): Conversación 15 · Agilidad 15 · Operaciones 10 · Precisión consultas 30 · Lógica visual 10 · Gráficos sin plantillas 10 · Vídeo 5 · Memoria 5.
-Fecha límite: **30 de septiembre**.
-Ollama pull qwen3:8b
+## Qué pide el enunciado del Reto 2
+
+> "Consultar movimientos bancarios mediante lenguaje natural. El asistente generará interfaces
+> dinámicas (**Generative UI**) automáticas con **gráficos y tablas** que refuercen la respuesta de voz."
+>
+> "Procesamiento de consultas complejas (**Gastos, Comparativas, Suscripciones**)."
+>
+> "Dominio de **Analítica Predictiva** y GenUI." · Stack: Unicaja & Google Cloud.
+
+**Tres consecuencias directas** sobre lo que hay construido:
+1. **Tablas**: la GenUI esperada incluye tablas, no solo gráficos. Hoy solo hay Vega-Lite.
+2. **Suscripciones**: es uno de los tres tipos de consulta que nombran y no hay ninguna lógica
+   de detección de recurrencia. Es la pieza de "analítica avanzada" que falta.
+3. **Predictiva**: el sistema es 100 % retrospectivo. Una proyección de gasto encaja directa.
+
 ---
 
-## 🔴 P0 — Bugs que rompen la demo (arreglar ya)
+# ✅ FASE 0 — Parar la hemorragia — **HECHA** (18 ago)
 
-### 1. Los gráficos no funcionan (`mostrar_grafico`)
-Hay varias causas probables encadenadas; revisar en este orden:
+Fallos que podían arruinar una demo en directo.
 
-- [x] ~~**`MAX_TOKENS = 700` trunca la spec Vega-Lite**~~ **HECHO**: subido a 2000 en `backend/config.py`. Además se fijó `TEMPERATURA = 0.2` (con la temperatura por defecto qwen3 generaba SQL inválido de forma intermitente).
-- [x] ~~**`json.loads(tc["arguments"])` sin proteger**~~ **HECHO**: ahora el JSON corrupto se devuelve al modelo como tool_result de error para que se autocorrija, igual que con el SQL.
-- [x] **Historial envenenado con `content: None`** — **HECHO**: cuando el modelo devolvía una iteración vacía, se guardaba un mensaje de asistente con `content: None` y Ollama rechazaba TODA la conversación posterior con 400 `invalid message content type: <nil>`. Ahora nunca se guarda `None` (siempre string), las iteraciones vacías se reintentan una vez, y si persisten se emite un mensaje de fallback en lugar de dejar la respuesta en blanco.
-- [x] **La spec puede llegar como string en vez de objeto** — **HECHO** (aunque qwen mejoró, se blinda igualmente): si `spec` es string se intenta `json.loads`; si está corrupto se devuelve el error al LLM para que reintente.
-- [x] **Validación demasiado estricta** — **HECHO**: ahora solo se exige `data.values` no vacío, buscándolo también dentro de `layer`/`hconcat`/`vconcat`/`facet` (helper `_tiene_datos_inline` en `tools.py`). Si la spec tiene otros defectos, vega-embed avisa en la UI.
-- [x] **Acumulación de tool calls en streaming frágil** — **HECHO**: `id`/`name` se guardan en cuanto aparecen en cualquier chunk y nunca se machacan con `None`; tras el stream, los tool calls sin nombre se descartan y a los que llegan sin id se les genera uno sintético para no romper el historial.
-- [x] **`MAX_ITERACIONES_AGENTE`** — **HECHO**: subido de 4 a 8, y si el bucle se agota sin texto final se emite un mensaje de fallback en vez de una burbuja vacía.
-- [x] Probado de punta a punta — **HECHO**: *"Compara mis gastos por categoría de los últimos 3 meses"* → barras + conclusión; *"Evolución de mis gastos mes a mes en el último año"* → gráfico temporal + conclusión (~18-33 s, 0 autocorrecciones SQL).
+- [x] **Crash que tumbaba el WebSocket**: en `gestionar_correccion_contacto_pendiente`
+      (`agent.py`), la rama de cancelación leía `self.bizum_pendiente` en vez de
+      `self.correccion_contacto_pendiente`, que ahí todavía es `None`.
+      Reproducido: *"Haz un bizum a Maria de 20 euros"* → *"¿Querías decir María López?"* → *"no"*
+      → `TypeError` → conexión muerta → historial perdido sin aviso. **Corregido y verificado.**
+- [x] **Incoherencia en el mismo flujo**: al aceptar la sugerencia de contacto se preguntaba
+      "¿Confirmas el envío?", pero cualquier "sí" caía en `gestionar_bizum_pendiente`, que solo
+      acepta cancelar y responde "introduce tu PIN". Ahora pide el PIN directamente y emite `pedir_pin`.
+- [x] **Blindaje**: `procesar` es ahora un envoltorio con `try/except` sobre `_procesar`, y el
+      handler del WS en `main.py` tiene su propia red de seguridad. Ninguna excepción puede cerrar
+      la conexión. Al fallar, se limpian `bizum_pendiente` y `correccion_contacto_pendiente`:
+      una operación de dinero a medias es peor que volver a empezarla.
+- [x] **`es_consulta_saldo` reescrito**. Antes hacía `substring` sobre expresiones genéricas y
+      secuestraba consultas de análisis. Ahora exige un disparador **y** que todas las palabras del
+      mensaje estén en una lista blanca: cualquier periodo, categoría o verbo extra descarta el atajo.
+      Diseñado asimétrico a propósito — un falso negativo solo cuesta latencia (el LLM tiene la
+      herramienta), un falso positivo da una respuesta incorrecta. Verificado con 18 casos:
+      - ahora van al LLM: "evolución de mi saldo este año", "cuál era mi saldo el mes pasado",
+        "cuánto me queda por pagar del alquiler", "cuánto tengo gastado en gasolina"
+      - siguen usando el atajo: "¿cuál es mi saldo?", "cuánto dinero tengo", "dime mi saldo"…
+- [x] **PIN con 3 intentos** (`INTENTOS_PIN` en `config.py`) y contador que se reinicia en cada
+      Bizum nuevo vía `dejar_bizum_pendiente()`. El PIN sale del código del agente a `config.py`
+      (`PIN_BIZUM`, sobreescribible por entorno) para que nunca pueda acercarse al prompt.
+- [x] **Timeout de 5 min → 30 min** (`TIMEOUT_WS_SEGUNDOS`), y el frontend avisa con una nota
+      visible cuando la sesión se reinicia, en vez de perder la memoria en silencio.
+- [x] `pedir_pin` ahora llama a `clearPin()`: antes solo vaciaba el display, no la variable en memoria.
 
-### 2. Falso positivo en el atajo de saldo
-- [ ] `es_consulta_saldo()` (`backend/agent.py:64`) usa `in` sobre substrings: *"¿cuánto tengo gastado en gasolina?"* contiene "cuanto tengo" → responde el saldo en vez de consultar movimientos. Excluir mensajes que contengan "gastado/gasté/gasto/pagado/pagué…" o usar regex con límites de palabra.
-
-### 3. Código duplicado y muerto
-- [x] `backend/banking_api.py` — **HECHO**: eliminada la duplicación completa del módulo; queda una sola copia de cada función (verificado: saldo y contactos siguen funcionando).
-- [x] `backend/tools.py` — **HECHO**: eliminado el código muerto tras el `return` de `mostrar_grafico`.
-
-### 4. El historial no registra las respuestas gestionadas por el backend
-- [ ] Los atajos de saldo, y todo el flujo de Bizum (confirmación, corrección de contacto, envío), responden sin añadir nada a `self.historial`. Después, el LLM no sabe que eso pasó: *"¿a quién acabo de enviar el bizum?"* falla. Añadir cada par usuario/asistente de las rutas directas al historial (afecta a los 15 pts de Conversación).
-
-### 5. Configuración incoherente
-- [x] ~~Sin `.env`, el proyecto arranca mal~~ **HECHO**: defaults cambiados a `ollama` + `qwen3:8b` en `agent.py`/`config.py`, y creado el `.env` local con esos valores.
-- [ ] `requirements.txt`: los paquetes `anthropic` y `ollama` no se importan en ningún sitio y se pueden quitar. Ojo: el paquete `openai` SÍ es necesario aunque el proveedor sea Ollama — es la librería cliente con la que se habla con el endpoint OpenAI-compatible de Ollama (`http://localhost:11434/v1`).
-- [ ] `README.md` (ambos): las instrucciones dicen "pon tu ANTHROPIC_API_KEY", pero el proyecto funciona con Ollama/OpenAI-compat. Actualizar la puesta en marcha (incluye `ollama pull llama3.1` y arrancar Ollama).
-
-### 6. Configuración audio
-- [] Arreglar performance de modelo bajo situaciones de comunicación natural voice to voice.
-
-### 7. Conjunto test
-- [] Hacer preguntas para test automatizadas (alrededor de 30 por ejemplo).
 ---
 
-## 🟠 P1 — Puntos del baremo en juego
+# 🟠 FASE 1 — Medir antes de tocar (3-4 días)
 
-### Agilidad (15 pts): recuperar el streaming percibido
-- [ ] `agent.py` ahora **bufferiza todo el texto** y solo lo emite al final de la iteración (para no mostrar texto previo a las tools). Esto mata la sensación de rapidez. Alternativa: empezar a emitir deltas en cuanto llegue texto y, si aparece un tool call en el mismo turno, cortar/limpiar; o emitir el buffer en cuanto termine el stream sin tool calls en vez de al final del bucle.
-- [ ] Medir y anotar latencias reales (primer token, respuesta completa, con/sin gráfico) → tabla para la memoria.
-- [ ] **Indicador de carga durante las tools**: cuando el agente llama a una herramienta que puede tardar (generar gráfico, SQL, Bizum), mostrar en el chat un circulito/spinner con estado (p. ej. "Generando gráfico…", "Consultando movimientos…"). Implementación: emitir desde el backend un evento nuevo `{"type": "tool_inicio", "nombre": ...}` justo antes de `ejecutar_tool` en `agent.py`, y en `index.html` pintar el spinner en el bloque actual y quitarlo al llegar el siguiente evento (`sql`, `grafico`, `texto`…). Hoy solo existe el punto parpadeante de la burbuja vacía, que no dice qué está pasando.
+Sin esto todo lo demás son corazonadas, y no hay nada que contar en la memoria.
 
-### Modelo local
-- [x] **Cambiar `llama3.1:8b` → `qwen3:8b`** — **HECHO y verificado** (consulta simple 3,8 s; SQL → gráfico → conclusión ~22 s). Nota: el interruptor `/no_think` NO funciona con la plantilla de qwen3 en Ollama; lo que funciona es pasar `extra_body={"reasoning_effort": "none"}` por el endpoint OpenAI-compatible (implementado en `agent.py` como `EXTRA_BODY`). También hay un filtro `limpiar_razonamiento()` que quita restos de `<think>` del texto.
-- [ ] Cuando exista el set de evaluación de SQL: comparar precisión y latencia de llama3.1:8b vs qwen3:8b vs qwen2.5:14b (este último no cabe en VRAM, ~9 GB en Q4 → más lento; solo si la precisión lo justifica). La tabla comparativa es material perfecto para la memoria.
+- [ ] `tests/preguntas.jsonl`: ~30 preguntas cubriendo los tres tipos que nombra el reto
+      (**gastos, comparativas, suscripciones**) + ambiguas + de seguimiento ("¿y esta semana?").
+- [ ] Runner que las lanza contra el agente y mide **acierto del SQL** y **latencia**
+      (primer token, respuesta completa, con y sin gráfico).
+- [ ] Tabla de resultados → material directo para la memoria y detección de regresiones.
 
-### Precisión de consultas (30 pts, lo más valioso)
-- [ ] Crear **set de evaluación** `tests/preguntas.jsonl` con ~30 preguntas y resultado esperado + script que las lanza contra el agente y mide el acierto del SQL. Es la mejor inversión: detecta regresiones y es material de oro para la memoria.
-- [ ] Añadir 3-4 ejemplos few-shot de SQL al system prompt (casos que ahora fallen según el set de evaluación: semanas, comparativas de meses, LIKE con nombres).
-- [ ] Probar preguntas con seguimiento ("¿y esta semana?", "¿y el mes pasado?") y ambiguas.
+---
 
-### Gráficos (20 pts)
-- [ ] Tras arreglar P0.1: verificar que el `razonamiento` se muestra bajo cada gráfico (10 pts de lógica visual se demuestran en pantalla).
-- [ ] Fallback robusto: si el modelo genera la spec sin datos o corrupta, reconstruir `data.values` desde el último resultado de `consultar_movimientos` en vez de fallar.
-- [ ] Probar variedad: línea (evolución), barras (ranking), donut (distribución) — el jurado valorará que la estructura cambie con la pregunta.
+# 🟠 FASE 2 — Los 30 puntos de precisión (2 semanas)
+
+- [ ] **Tool `analizar_suscripciones`**: detección de recurrencia real en Python
+      (comercio + importe + cadencia). Un qwen3:8b no va a escribir ese SQL solo, y una
+      implementación determinista se defiende mucho mejor en la memoria.
+      Debe responder: "¿a qué estoy suscrito?", "¿cuánto me cuestan al mes?", "¿alguna ha subido de precio?".
+- [ ] **Few-shots de SQL** en el system prompt para los casos que falle la Fase 1
+      (comparativas mes a mes, semanas, LIKE con nombres parciales).
+- [ ] **Contexto**: `MAX_FILAS = 200` en `database.py` + el resultado íntegro al historial
+      (`str(salida)` en `agent.py`) desbordan los 8192 tokens de contexto en un solo turno.
+      Ollama trunca por delante, se pierde el system prompt y la calidad se cae. Bajar el límite
+      y recortar/resumir el historial.
+
+---
+
+# 🟠 FASE 3 — GenUI y agilidad (1-2 semanas)
+
+### Tablas (refuerza los 10 pts de lógica visual)
+- [ ] **Tool `mostrar_tabla`** + criterio gráfico-vs-tabla en el prompt.
+      Argumento: elegir entre 4 marcas de Vega-Lite es una decisión pobre; en cuanto la IA puede
+      elegir *tabla o gráfico*, el "por qué esta representación" pasa a ser lógica visual real
+      — y es literalmente lo que pide el enunciado.
+
+### Agilidad (15 pts)
+- [ ] **Streaming percibido**: `agent.py` bufferiza todo el texto y lo emite al final de la
+      iteración (para no mostrar texto previo a las tools). Emitir deltas en cuanto llegue texto
+      y cortar/limpiar si aparece un tool call en el mismo turno.
+- [ ] **Indicador durante las tools**: evento `{"type": "tool_inicio", "nombre": ...}` antes de
+      `ejecutar_tool`, y spinner con estado en el frontend ("Generando gráfico…", "Consultando
+      movimientos…"). Hoy solo hay el punto parpadeante de la burbuja vacía.
+- [ ] **TTS por frases**: trocear por puntuación y hablar cada frase según llega.
+
+### Gráficos (10 pts)
+- [ ] Fallback: si la spec llega sin datos o corrupta, reconstruir `data.values` desde el último
+      resultado de `consultar_movimientos` en vez de fallar.
+- [ ] Probar variedad: línea (evolución), barras (ranking), donut (distribución).
 
 ### Operaciones (10 pts)
-- [ ] Ampliar los patrones regex de `extraer_peticion_bizum` (p. ej. "bizum de 20 euros para María", "págale 15 € a Ana", cantidades escritas "veinte euros" — al menos las cifras con € pegado "20€").
-- [ ] Probar el flujo completo por voz: petición → sugerencia de contacto → confirmación → saldo actualizado en cabecera.
+- [ ] Ampliar regex de `extraer_peticion_bizum`. Verificado que fallan hoy:
+      "bizum de 20 euros para María", "págale 15 euros a Ana por bizum".
+      (Cuando falla no es fatal: cae al LLM, que tiene la tool — pero es más lento y menos fiable.)
+- [ ] Probar el flujo completo por voz: petición → sugerencia de contacto → PIN → saldo actualizado.
 
-### Conversación y voz (15 pts)
-- [ ] TTS por frases: trocear el texto por puntuación y hablar cada frase según llega (baja la latencia percibida).
-- [ ] Limitar el crecimiento del historial (resumir o recortar turnos antiguos) para que la latencia no se degrade en conversaciones largas.
+### Extra diferenciador si da tiempo
+- [ ] **Proyección de gasto a fin de mes** / alerta de desviación vs. media histórica
+      ("Analítica Predictiva" aparece en el enunciado).
 
 ---
 
-## 🟡 P2 — Entregables (10 pts) y pulido
+# 🟡 FASE 4 — Entregables (última semana)
 
-- [ ] **Vídeo demo ≤ 3 min** (guion sugerido en `banco-conversacional/README.md §5`): voz + saldo + SQL visible + seguimiento contextual + 2 gráficos de tipos distintos + Bizum con confirmación.
-- [ ] **Memoria técnica**: arquitectura, diseño del agente y tools, text-to-SQL (seguridad + autocorrección + tabla de precisión del set de evaluación), motor visual, IA responsable, latencias medidas.
-- [ ] Regenerar `banco.db` justo antes de grabar (`python -m backend.seed`): los datos se generan relativos a *hoy*, y con una BD vieja "este mes" sale vacío.
-- [ ] Migrar `@app.on_event("startup")` (`backend/main.py:39`) a `lifespan` (deprecado en FastAPI).
-- [ ] Manejo de errores visible en la UI: si Ollama no está arrancado, ahora sale un error críptico; mostrar un aviso claro.
+- [ ] **Regenerar `banco.db`** (`python -m backend.seed`): los datos se generan relativos a *hoy*.
+      Con una BD vieja, "este mes" sale vacío. Comprobado: el último movimiento es del 12 de agosto.
+- [ ] **Vídeo demo** (5 pts): voz + consulta compleja + SQL visible + seguimiento contextual +
+      gráfico y tabla + suscripciones + Bizum con PIN.
+- [ ] **Memoria técnica** (5 pts): arquitectura, diseño del agente y tools, text-to-SQL
+      (seguridad + autocorrección + tabla de precisión de la Fase 1), motor visual y criterio de
+      representación, IA responsable, latencias medidas.
+
+---
+
+# 🟡 Pulido y deuda técnica
+
+- [ ] `requirements.txt`: `anthropic` y `ollama` no se importan en ningún sitio, quitar.
+      Ojo: `openai` SÍ es necesario aunque el proveedor sea Ollama — es el cliente del endpoint
+      OpenAI-compatible (`http://localhost:11434/v1`).
+- [ ] `README.md` (ambos): siguen diciendo "pon tu ANTHROPIC_API_KEY". Actualizar a Ollama
+      (`ollama pull qwen3:8b`, `./arrancar_ollama.sh`).
+- [ ] **Fuga de conexiones SQLite**: `with conexion_lectura() as conn:` **no cierra** la conexión
+      — el context manager de sqlite3 solo hace commit/rollback. Afecta a `database.py` y a todo
+      `banking_api.py`. Cada consulta deja un descriptor abierto.
+- [ ] Migrar `@app.on_event("startup")` (`main.py`) a `lifespan` (deprecado en FastAPI).
+- [ ] Error visible en la UI si Ollama no está arrancado (hoy sale un error críptico).
+- [ ] **Código muerto** en `index.html` (~línea 464): un bloque dentro de `if (Reconocedor)` lee
+      `input.value` y hace `enviar()` en tiempo de carga de página, cuando el input siempre está
+      vacío. Parece que debía ir dentro de `rec.onend`.
+- [ ] `retoCajaRural.zip` está commiteado dentro del propio repo.
 - [ ] Revisar la UI en móvil / ventana estrecha.
 
 ---
 
-## Notas de contexto
+# ✅ Hecho
 
-- El reto pide: interacción natural (voz+texto), operaciones (saldo + Bizum simulado), análisis del histórico en lenguaje natural, y **gráficos generados en tiempo real sin plantillas**.
-- El proyecto se migró de Anthropic a proveedores OpenAI-compatibles (Ollama con `llama3.1` por defecto). Gran parte de los bugs de gráficos vienen de que un modelo local de 8B genera tool calls menos fiables que Claude: el código debe ser mucho más tolerante (parsear strings, reintentar, devolver errores al modelo).
+- [x] **Migración de Anthropic a proveedores OpenAI-compatibles**. Defaults `ollama` + `qwen3:8b`
+      en `agent.py`/`config.py`, `.env` local creado.
+- [x] **`llama3.1:8b` → `qwen3:8b`** (consulta simple 3,8 s; SQL → gráfico → conclusión ~22 s).
+      El interruptor `/no_think` **no** funciona con la plantilla de qwen3 en Ollama; lo que
+      funciona es `extra_body={"reasoning_effort": "none"}` por el endpoint OpenAI-compatible
+      (implementado como `EXTRA_BODY`). Hay además un filtro `limpiar_razonamiento()` que quita
+      restos de `<think>`.
+- [x] **Historial de las rutas gestionadas por backend**: `responder_directo` registra en
+      `self.historial` y `procesar` mete el mensaje de usuario antes de los atajos.
+- [x] **Capa de seguridad**: PIN por evento WebSocket aparte, nunca entra en el historial del LLM.
+- [x] **Tolerancia a modelos pequeños**: JSON corrupto → se devuelve el error al LLM para que se
+      autocorrija; spec Vega-Lite como string → se parsea; iteración vacía → reintento.
+- [x] Barra espaciadora para activar el micro + indicador de altavoz.
+- [x] `arrancar_ollama.sh` con `OLLAMA_CONTEXT_LENGTH=8192`, `KEEP_ALIVE=30m`, `FLASH_ATTENTION=1`.
+
+---
+
+# Notas de contexto
+
+- Buena parte de los bugs vienen de que un modelo local de 8B genera tool calls menos fiables que
+  Claude: el código debe ser mucho más tolerante (parsear strings, reintentar, devolver errores al
+  modelo).
+- El stack que anuncia la cátedra es **Unicaja & Google Cloud** (+ NVIDIA). Ollama local es
+  defendible para un prototipo, pero conviene tener preparada en la memoria la respuesta de cómo
+  migraría a Vertex AI / Gemini, o por qué el modelo local es mejor decisión (coste, latencia,
+  soberanía del dato financiero).
+- El proyecto solapa con el **Reto 1** (voz realtime, LLM open source, casos de uso "Bizum por voz,
+  saldos y seguridad"). El baremo oficial puntúa Conversación + Agilidad + Operaciones = 40 pts,
+  así que esa parte cuenta y no hay que desmontarla.

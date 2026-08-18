@@ -38,6 +38,27 @@ TEMPERATURA = 0.2
 MAX_ITERACIONES_AGENTE = 8
 
 #===========================================================================
+# configuración de seguridad de operaciones
+#===========================================================================
+
+# PIN simulado del cliente. Vive aquí y no en el código del agente para que
+# nunca entre en el prompt ni en el historial que ve el LLM.
+PIN_BIZUM = os.getenv("PIN_BIZUM", "1234")
+
+# Intentos de PIN antes de cancelar el envío. Con un solo intento, una errata
+# en el teclado numérico obliga a rehacer toda la petición.
+INTENTOS_PIN = 3
+
+#===========================================================================
+# configuración del servidor
+#===========================================================================
+
+# Inactividad máxima de una conexión WebSocket. Al cerrarse, el frontend
+# reconecta y se crea un Agente nuevo: el historial se pierde. Con 5 minutos
+# bastaba una pausa en una demo para quedarse sin memoria a mitad.
+TIMEOUT_WS_SEGUNDOS = int(os.getenv("TIMEOUT_WS_SEGUNDOS", "1800"))
+
+#===========================================================================
 # configuración Base de datos
 #===========================================================================
 RAIZ = Path(__file__).resolve().parent.parent

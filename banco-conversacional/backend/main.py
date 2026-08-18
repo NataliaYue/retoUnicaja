@@ -22,6 +22,7 @@ Protocolo WebSocket (JSON en ambos sentidos):
 Arranque:  uvicorn backend.main:app --reload
 """
 import asyncio
+import traceback
 
 from pathlib import Path
 
@@ -30,7 +31,7 @@ from fastapi.responses import FileResponse
 
 from .agent import Agente
 from .banking_api import api_consultar_saldo
-from .config import DB_PATH
+from .config import DB_PATH, TIMEOUT_WS_SEGUNDOS
 
 
 app = FastAPI(title="Habla con tu dinero — Reto Unicaja & UGR")
@@ -71,24 +72,40 @@ async def websocket_chat(ws: WebSocket):
 
     try:
         while True:
-            # Espera 5 minutos (300 segundos) máximo
-            datos_ws = await asyncio.wait_for(ws.receive_json(), timeout=300.0)
-            
+            datos_ws = await asyncio.wait_for(
+                ws.receive_json(),
+                timeout=TIMEOUT_WS_SEGUNDOS,
+            )
+
             # Extraemos el tipo de evento (si no viene, asumimos que es 'chat')
             tipo_evento = datos_ws.get("type", "chat")
-            
-            if tipo_evento == "chat":
-                mensaje = (datos_ws.get("mensaje") or "").strip()
-                if mensaje:
-                    # Solo los mensajes normales de chat van al historial
-                    await agente.procesar(mensaje)
-                    
-            elif tipo_evento == "auth_bizum":
-                pin = datos_ws.get("pin")
-                if pin:
-                    # Este método aislará la contraseña del LLM (lo crearemos ahora)
-                    await agente.validar_pin_bizum(pin)
-                    
+
+            # Red de seguridad: si un turno falla, se informa y se sigue
+            # escuchando. Dejar que la excepción suba cerraría el WebSocket y
+            # el usuario perdería el historial completo sin ningún aviso.
+            try:
+                if tipo_evento == "chat":
+                    mensaje = (datos_ws.get("mensaje") or "").strip()
+                    if mensaje:
+                        # Solo los mensajes normales de chat van al historial
+                        await agente.procesar(mensaje)
+
+                elif tipo_evento == "auth_bizum":
+                    pin = datos_ws.get("pin")
+                    if pin:
+                        # Este método aísla la contraseña del LLM
+                        await agente.validar_pin_bizum(pin)
+
+            except WebSocketDisconnect:
+                raise
+            except Exception:
+                traceback.print_exc()
+                await emitir({
+                    "type": "error",
+                    "detalle": "no he podido completar la operación. Inténtalo de nuevo.",
+                })
+                await emitir({"type": "fin_respuesta", "texto": ""})
+
     except asyncio.TimeoutError:
         await emitir({"type": "error", "detalle": "Sesión cerrada por inactividad."})
         await ws.close()

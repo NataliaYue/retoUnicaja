@@ -122,6 +122,7 @@
   .sugerencias button:hover{border-color:var(--verde); color:var(--verde)}
 
   .aviso-error{align-self:center; color:var(--rojo); font-size:13px; background:#FBEDE9; padding:8px 14px; border-radius:10px}
+  .aviso-sesion{align-self:center; color:var(--tinta-suave); font-size:13px; background:var(--verde-claro); padding:8px 14px; border-radius:10px; text-align:center}
 
   /* ── Barra de entrada ─────────────────────────────────── */
   footer{padding:12px 18px 18px; background:linear-gradient(transparent, var(--fondo) 40%)}
@@ -294,12 +295,31 @@ let ttsActivo = false;     // hablar las respuestas en voz alta
 let ultimaEntradaFueVoz = false;
 
 /* ── 1. WebSocket ──────────────────────────────────────────────────── */
+let huboConexionPrevia = false;
+
 function conectar(){
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onopen = () => {
+    // Cada conexión crea un Agente nuevo en el backend, así que al reconectar
+    // el asistente ya no recuerda nada. Antes esto pasaba en silencio y
+    // parecía que el asistente se había "olvidado" sin motivo.
+    if (huboConexionPrevia) {
+      avisar('Se ha reiniciado la conexión. El asistente no recuerda lo hablado hasta ahora.');
+    }
+    huboConexionPrevia = true;
+  };
   ws.onmessage = (e) => manejarEvento(JSON.parse(e.data));
   ws.onclose = () => setTimeout(conectar, 1000); // reconexión automática
 }
 //conectar();
+
+function avisar(texto){
+  const aviso = document.createElement('div');
+  aviso.className = 'aviso-sesion';
+  aviso.textContent = texto;
+  chat.appendChild(aviso);
+  bajar();
+}
 
 /* ── Lógica de Inicio de Sesión ────────────────────────────────────── */
 function iniciarSesion() {
@@ -359,8 +379,8 @@ function manejarEvento(ev){
 
     case 'pedir_pin':
       document.getElementById('pin-modal').classList.remove('oculto');
-      document.getElementById('pin-display').value = '';
-      break;  
+      clearPin();   // limpia también el PIN en memoria, no solo el display
+      break;
 
     case 'texto': // streaming token a token
       if (burbujaActual) burbujaActual.textContent += ev.delta;

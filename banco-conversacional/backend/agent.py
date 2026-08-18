@@ -1,11 +1,20 @@
 import os
 import re
 import json
+import traceback
 import unicodedata
 from difflib import get_close_matches
 from openai import AsyncOpenAI
 
-from .config import MAX_ITERACIONES_AGENTE, MAX_TOKENS, MODELO, TEMPERATURA, system_prompt
+from .config import (
+    INTENTOS_PIN,
+    MAX_ITERACIONES_AGENTE,
+    MAX_TOKENS,
+    MODELO,
+    PIN_BIZUM,
+    TEMPERATURA,
+    system_prompt,
+)
 from .tools import TOOLS, ejecutar_tool
 from .banking_api import api_listar_contactos_bizum
 
@@ -70,20 +79,54 @@ EXTRA_BODY = (
 
 
 
-def es_consulta_saldo(mensaje: str) -> bool:
-    mensaje = normalizar_texto(mensaje)
-
-    expresiones_saldo = [
+# Expresiones que identifican una pregunta por el saldo.
+_DISPARADORES_SALDO = (
     "saldo",
-    "saldo actual",
-    "saldo disponible",
+    "cuanto dinero",
     "dinero disponible",
-    "cuanto dinero tengo",
     "cuanto me queda",
-    "cual es mi saldo actual",
-]
+    "cuanto tengo",
+)
 
-    return any(expr in mensaje for expr in expresiones_saldo)
+# Palabras que pueden acompañar a una pregunta de saldo sin cambiar lo que
+# pide. Cualquier término fuera de esta lista (un periodo, una categoría, otro
+# verbo) significa que la pregunta no es "¿cuánto tengo ahora?" y debe ir al LLM.
+_RELLENO_SALDO = frozenset({
+    "a", "actual", "actualmente", "ahora", "banco", "corriente", "cual",
+    "cuanta", "cuanto", "cuenta", "dame", "de", "del", "dime", "dinero",
+    "disponible", "disponibles", "el", "en", "es", "esta", "favor", "hay",
+    "hola", "la", "las", "los", "me", "mi", "mis", "mismo", "mostrar",
+    "muestra", "muestrame", "oye", "podrias", "por", "puedes", "que", "queda",
+    "quedan", "quiero", "saber", "saldo", "tengo", "tiene", "ver", "y",
+})
+
+
+def es_consulta_saldo(mensaje: str) -> bool:
+    """
+    Atajo: las preguntas por el saldo actual se resuelven con una llamada a la
+    API bancaria, sin pasar por el LLM (ahorra ~3 s por pregunta).
+
+    Es deliberadamente estricto, porque los dos errores no cuestan lo mismo:
+    - Un falso negativo solo cuesta latencia. El LLM tiene `consultar_saldo` y
+      el system prompt le obliga a usarla, así que la respuesta sigue siendo
+      correcta.
+    - Un falso positivo responde con el saldo de hoy a una pregunta que pedía
+      otra cosa. Con la comprobación anterior (substring suelto) pasaba con
+      "¿cuál era mi saldo el mes pasado?" (respuesta incorrecta), "muéstrame la
+      evolución de mi saldo este año" (se perdía el gráfico) o "¿cuánto me
+      queda por pagar del alquiler?".
+    """
+    texto = normalizar_texto(mensaje)
+    texto = re.sub(r"[^\w\s]", " ", texto)          # ¿?, €, comas...
+    texto = re.sub(r"\s+", " ", texto).strip()
+
+    if not texto:
+        return False
+
+    if not any(disparador in texto for disparador in _DISPARADORES_SALDO):
+        return False
+
+    return all(palabra in _RELLENO_SALDO for palabra in texto.split())
 
 def formatear_euros(cantidad: float) -> str:
     texto = f"{cantidad:,.2f}"
@@ -308,8 +351,18 @@ class Agente:
         # Guarda un Bizum pendiente hasta que el usuario confirme o cancele.
         self.bizum_pendiente: dict | None = None
         self.correccion_contacto_pendiente: dict | None = None
-        
-        
+        self.intentos_pin_restantes: int = INTENTOS_PIN
+
+    def dejar_bizum_pendiente(self, destinatario: str, cantidad: float, concepto: str) -> None:
+        """Deja un Bizum a la espera del PIN y reinicia el contador de intentos."""
+        self.bizum_pendiente = {
+            "destinatario": destinatario,
+            "cantidad": cantidad,
+            "concepto": concepto,
+        }
+        self.intentos_pin_restantes = INTENTOS_PIN
+
+
     def asegurar_system_en_historial(self) -> None:
         """Añade el system prompt una sola vez, antes del primer turno."""
         if not self.historial:
@@ -360,25 +413,26 @@ class Agente:
             cantidad = pendiente["cantidad"]
             concepto = pendiente.get("concepto", "")
 
-            self.bizum_pendiente = {
-                "destinatario": contacto,
-                "cantidad": cantidad,
-                "concepto": concepto,
-            }
+            self.dejar_bizum_pendiente(contacto, cantidad, concepto)
 
             texto = (
                 f"Perfecto. Vas a enviar {formatear_euros(cantidad)} "
-                f"a {contacto}. ¿Confirmas el envío?"
+                f"a {contacto}. Introduce tu PIN de seguridad para confirmar el envío."
             )
 
             await self.responder_directo(texto)
+            await self.emitir({"type": "pedir_pin"})
             return True
 
         if es_cancelacion_bizum(mensaje_usuario):
-            pendiente = self.bizum_pendiente
-            self.bizum_pendiente = None
+            # Ojo: aquí el pendiente es la CORRECCIÓN de contacto, no el Bizum.
+            # `self.bizum_pendiente` todavía es None (solo se rellena al aceptar
+            # la sugerencia), y leerlo aquí reventaba con TypeError y tumbaba
+            # la conexión WebSocket entera.
+            pendiente = self.correccion_contacto_pendiente
+            self.correccion_contacto_pendiente = None
 
-            destinatario = pendiente["destinatario"]
+            destinatario = pendiente["destinatario_original"]
             cantidad = pendiente["cantidad"]
 
             texto = (
@@ -423,12 +477,25 @@ class Agente:
             await self.responder_directo("No hay ningún envío de Bizum pendiente.")
             return
 
-        # Simulación de PIN correcto (en un entorno real, cruzar con la BD)
-        PIN_CORRECTO = "1234"
+        # PIN simulado (en un entorno real, cruzar con la BD contra un hash).
+        # Vive en config.py para que no aparezca en el código del agente.
+        if pin != PIN_BIZUM:
+            self.intentos_pin_restantes -= 1
 
-        if pin != PIN_CORRECTO:
-            self.bizum_pendiente = None
-            await self.responder_directo("PIN incorrecto. Por tu seguridad, se ha cancelado el envío.")
+            if self.intentos_pin_restantes <= 0:
+                self.bizum_pendiente = None
+                await self.responder_directo(
+                    "PIN incorrecto. Has agotado los intentos y, por tu seguridad, "
+                    "he cancelado el envío. No se ha movido dinero."
+                )
+                return
+
+            restantes = self.intentos_pin_restantes
+            await self.responder_directo(
+                f"PIN incorrecto. Te {'queda' if restantes == 1 else 'quedan'} "
+                f"{restantes} {'intento' if restantes == 1 else 'intentos'}."
+            )
+            await self.emitir({"type": "pedir_pin"})
             return
 
         # Si el PIN es correcto, procedemos a ejecutar la herramienta
@@ -493,11 +560,7 @@ class Agente:
 
         destinatario = validacion["contacto"]
 
-        self.bizum_pendiente = {
-            "destinatario": destinatario,
-            "cantidad": cantidad,
-            "concepto": concepto,
-        }
+        self.dejar_bizum_pendiente(destinatario, cantidad, concepto)
 
         texto = (
             f"Vas a enviar {formatear_euros(cantidad)} "
@@ -505,12 +568,37 @@ class Agente:
         )
 
         await self.responder_directo(texto)
-        
+
         # Le enviamos la señal al frontend para que despliegue el teclado numérico / modal de PIN
         await self.emitir({"type": "pedir_pin"})
     
     
     async def procesar(self, mensaje_usuario: str) -> None:
+        """
+        Punto de entrada de un turno de conversación.
+
+        Nada debe escapar de aquí: una excepción que suba hasta el handler del
+        WebSocket cierra la conexión, el frontend reconecta solo y se construye
+        un Agente nuevo, así que el usuario pierde todo el historial sin que
+        nada se lo diga.
+        """
+        try:
+            await self._procesar(mensaje_usuario)
+        except Exception:
+            traceback.print_exc()
+
+            # Una operación de dinero a medias es peor que volver a empezarla.
+            self.bizum_pendiente = None
+            self.correccion_contacto_pendiente = None
+
+            await self.emitir({
+                "type": "error",
+                "detalle": "algo ha fallado al procesar tu mensaje. "
+                           "Si estabas haciendo un Bizum, vuelve a pedírmelo: no se ha enviado nada.",
+            })
+            await self.emitir({"type": "fin_respuesta", "texto": ""})
+
+    async def _procesar(self, mensaje_usuario: str) -> None:
         # Todos los mensajes entran en el historial,
         # también los gestionados directamente por el backend.
         self.asegurar_system_en_historial()
@@ -765,13 +853,9 @@ class Agente:
 
                         destinatario = validacion["contacto"]
 
-                        self.bizum_pendiente = {
-                            "destinatario": destinatario,
-                            "cantidad": cantidad,
-                            "concepto": concepto,
-                        }
+                        self.dejar_bizum_pendiente(destinatario, cantidad, concepto)
 
-                        # MODIFICADO: Mismo texto que en el atajo rápido
+                        # Mismo texto que en el atajo rápido
                         texto = (
                             f"Vas a enviar {formatear_euros(cantidad)} "
                             f"a {destinatario}. Por favor, introduce tu PIN de seguridad para confirmar el envío."
