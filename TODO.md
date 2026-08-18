@@ -77,16 +77,112 @@ Sin esto todo lo demás son corazonadas, y no hay nada que contar en la memoria.
 
 ---
 
-# 🟠 FASE 2 — Los 30 puntos de precisión (2 semanas)
+# ✅ FASE 2 — Los 30 puntos de precisión — **HECHA** (18 ago)
 
-- [ ] **Tool `analizar_suscripciones`**: detección de recurrencia real en Python
-      (comercio + importe + cadencia). Un qwen3:8b no va a escribir ese SQL solo, y una
-      implementación determinista se defiende mucho mejor en la memoria.
-      Debe responder: "¿a qué estoy suscrito?", "¿cuánto me cuestan al mes?", "¿alguna ha subido de precio?".
-- [ ] **Few-shots de SQL** en el system prompt para los casos que falle la Fase 1
-      (comparativas mes a mes, semanas, LIKE con nombres parciales).
-- [ ] **Contexto**: `MAX_FILAS = 200` en `database.py` + el resultado íntegro al historial
-      (`str(salida)` en `agent.py`) desbordan los 8192 tokens de contexto en un solo turno.
+- [x] **`backend/analitica.py` + tool `analizar_suscripciones`**: detección determinista de
+      pagos recurrentes en Python. **Hallazgo clave**: el importe no discrimina (el recibo de la
+      luz varía tanto como un repostaje, CV 0,16 vs 0,25); lo que discrimina es la **regularidad
+      de los intervalos** entre cargos:
+      | | irregularidad |
+      |---|---|
+      | Netflix, Spotify, Digi, Gimnasio, Alquiler, Endesa | 0,03 |
+      | Emasagra (bimestral) | 0,01 |
+      | El más regular de los NO recurrentes | 0,12 |
+      | Supermercados, gasolineras, restaurantes | 0,25 – 3,34 |
+      Segunda condición necesaria: con menos de 3 intervalos la regularidad no prueba nada (con
+      dos cargos hay UN intervalo y su desviación típica es cero por definición), así que ahí se
+      exige que el importe sea idéntico. Eso deja pasar la póliza anual y descarta coincidencias.
+      Calcula cadencia, coste mensual equivalente, subidas de precio escalonadas y si sigue activo.
+- [x] **Validado contra 500 semillas distintas** (`tests/test_recurrencia.py`), comparando con la
+      verdad conocida por construcción en `seed.py`: **0 falsos negativos, 1 falso positivo
+      (0,2 % de los históricos), 0 cadencias mal clasificadas, seguro anual detectado 500/500**.
+      Los umbrales salieron de esa medición, no de mirar una sola BD. Las dos decisiones que más
+      pesaron: bajar la irregularidad de 0,10 a 0,06 (−7 FP, 0 FN nuevos) y **ampliar `seed.py` de
+      15 a 24 meses**, que por sí solo llevó los falsos positivos de 23 a 0 — con más histórico,
+      los comercios aleatorios acumulan cargos suficientes para que su irregularidad se note.
+      Material de primera para la memoria: es una decisión de diseño medida, no una corazonada.
+- [x] **`seed.py` ampliado a 24 meses** (`INICIO = hoy − 730 días`). Efectos: el seguro del coche
+      ya tiene dos renovaciones y se detecta como pago anual (34,88 €/mes equivalente), se
+      habilitan las comparativas interanuales, y desaparecen los falsos positivos. BD regenerada:
+      1.020 movimientos entre 2024-08-01 y hoy.
+- [x] **Few-shots de SQL** en el system prompt: comparativa mes actual vs anterior en una sola
+      consulta, evolución mensual agrupada, semana en curso, y LIKE con comodines a ambos lados.
+- [x] **Contexto**: `MAX_FILAS` 200 → 50, recorte del historial a 24 mensajes
+      (`recortar_historial()`, corta siempre en frontera de turno para no dejar mensajes `tool`
+      huérfanos que la API rechaza) y tope de 4.000 caracteres por resultado de herramienta.
+
+**Verificado en vivo contra Ollama**, con las cifras contrastadas contra SQL directo:
+
+| Pregunta | Tool | Resultado | Tiempo |
+|---|---|---|---|
+| "¿A qué estoy suscrito?" | `analizar_suscripciones` | 8 pagos, 842,10 €/mes ✅ | 5,8 s |
+| "¿Cuánto me cuestan al mes los pagos fijos?" | `analizar_suscripciones` | 842,10 € ✅ | 2,9 s |
+| "¿Cuánto he gastado este mes vs el pasado?" | `consultar_movimientos` | 1.752,89 € vs 2.034,05 € ✅ | 4,9 s |
+| "¿Cuánto le he enviado por bizum a María?" | `consultar_movimientos` | 675,29 € ✅ | 2,7 s |
+
+- [x] **Subida de precio en los datos**: Netflix pasa de 13,99 € a 15,99 € a mitad del histórico
+      (`SUBIDA_NETFLIX` en `seed.py`, ~1 año a cada precio). Sin esto la detección de cambios de
+      precio no tenía nada sobre lo que dispararse. El test lo comprueba en las 100 semillas.
+- [x] **La respuesta de la tool se entrega ya resuelta, no en crudo**. Con la lista plana y un
+      `cambio_precio: null` en siete de ocho entradas, el modelo agregaba mal: *"ninguna
+      suscripción ha subido de precio. Sin embargo, Netflix ha subido de 13,99 a 15,99 €"* — se
+      contradecía en la misma frase. Ahora devuelve `suscripciones` y `recibos_fijos` separados,
+      más `hay_subidas_de_precio` y `subidas_de_precio`. Quitarle el trabajo de agregar es lo que
+      lo arregla, y a coste cero de latencia. Misma lección que con los gráficos: si el backend
+      puede resolverlo, no se lo pidas a un 8B.
+      Verificado: *"¿Me ha subido de precio alguna suscripción?"* → **"Sí, Netflix. Antes costaba
+      13,99 € y ahora 15,99 €, un incremento de 2,00 € al mes"** en 4,0 s.
+
+### Cosmético, sin prisa
+- [ ] Al enumerar, el modelo sigue metiendo los recibos en la frase de "estás suscrito a…"
+      (*"estás suscrito a el gimnasio, Netflix, Spotify, alquiler, luz…"*). Cifras y orden son
+      correctos, y el payload ya viene separado. Se descartó meter un ejemplo de redacción con
+      cifras concretas en el prompt: un modelo de 8B puede copiar esas cifras literales cuando los
+      datos sean otros, y eso convierte un fallo de estilo en un error factual.
+
+### 🔴 Pendiente: fiabilidad de los gráficos (20 pts) — DIAGNOSTICADO, NO RESUELTO
+
+Medido sobre 6 preguntas que según los criterios del system prompt debían acabar en gráfico:
+**solo 2 lo hacen**. Falla justo en las que el modelo puede resumir en una frase ("has gastado X
+frente a Y"): ve el resultado, lo da por respondido y se salta la regla, que está a ~2.000 tokens
+de distancia en el system prompt. Las que sí funcionan son las que llevan lenguaje visual
+explícito ("muéstrame", "cómo se reparten").
+
+Se intentó recordárselo con un aviso generado por el backend cuando el resultado tiene 2+ valores
+comparables (sin elegir el tipo de gráfico: esa decisión debe seguir siendo del LLM porque es lo
+que puntúa como "sin plantillas"). **Dónde se coloca el aviso importa muchísimo**, medido con
+repeticiones del mismo turno:
+
+| Variante | Gráficos |
+|---|---|
+| Sin aviso (control) | 0/3 — siempre responde con texto |
+| Aviso dentro del propio resultado de la tool | 0/3 — **respuesta VACÍA** |
+| Aviso como mensaje `user` aparte | 0/3 — **respuesta VACÍA** |
+| Aviso como mensaje `system` aparte | 2/3 |
+
+Y la causa de las respuestas vacías es `reasoning_effort: none`:
+
+| | Gráficos | Vacías |
+|---|---|---|
+| `reasoning_effort=none` | 2/5 | 3 |
+| Sin `reasoning_effort` (razonamiento activo) | 4/5 | 0 |
+
+**Se implementó y se revirtió**: activar el razonamiento solo en esa iteración subía los gráficos
+de 2/6 a 3/6 pero disparaba la latencia de 4-24 s a 17-34 s, pagándola incluso cuando no acababa
+en gráfico. Mal cambio: 15 pts de agilidad por +1 gráfico de 6. **Decisión: mantener baja latencia
+y gráficos regulares por ahora.**
+
+- [ ] Arreglo bueno pendiente para la Fase 3: **llamada dedicada solo para el gráfico**. Tras un
+      resultado graficable, hacer UNA petición aparte cuya única tarea sea devolver la spec
+      Vega-Lite, con un prompt mínimo y solo los datos. Un modelo de 8B es mucho más fiable en una
+      tarea única que decidiendo entre responder y encadenar herramienta. Se puede lanzar en
+      paralelo con la redacción de la respuesta, así que no añade latencia percibida.
+- [ ] **Un gráfico llegó con `mark` a nulo** (13 datos, sin marca). `tools.py` solo valida que
+      haya `data.values` — a propósito, para admitir `layer`/`concat` — así que una spec sin marca
+      pasa el filtro y luego falla en `vega-embed`. Revisar y dar mensaje claro al modelo.
+- [ ] **Ninguna suscripción cambia de precio en los datos**, así que la rama de detección de
+      subidas está implementada pero no se puede demostrar. Una subida de Netflix a mitad del
+      histórico (una línea en `seed.py`) daría un momento muy bueno de vídeo.
       Ollama trunca por delante, se pierde el system prompt y la calidad se cae. Bajar el límite
       y recortar/resumir el historial.
 

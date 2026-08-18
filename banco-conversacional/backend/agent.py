@@ -8,7 +8,9 @@ from openai import AsyncOpenAI
 
 from .config import (
     INTENTOS_PIN,
+    MAX_CHARS_TOOL_RESULT,
     MAX_ITERACIONES_AGENTE,
+    MAX_MENSAJES_HISTORIAL,
     MAX_TOKENS,
     MODELO,
     PIN_BIZUM,
@@ -371,6 +373,38 @@ class Agente:
                 "content": self.system,
             })
 
+    def recortar_historial(self) -> None:
+        """
+        Limita el historial a los últimos turnos, conservando el system prompt.
+
+        Sin esto, una conversación larga (con resultados SQL dentro) desborda
+        los 8192 tokens de contexto. Cuando eso pasa, Ollama trunca por
+        delante, o sea que lo primero que se pierde es el system prompt: el
+        agente deja de saber el esquema de la BD y las reglas de estilo, y
+        empieza a responder peor sin que nada indique por qué.
+
+        El corte no puede caer en cualquier sitio. Un mensaje `tool` sin el
+        `assistant` con `tool_calls` que lo provocó deja el historial
+        inconsistente y la API lo rechaza, así que se avanza hasta el
+        siguiente mensaje de `user`, que siempre abre un turno completo.
+        """
+        if len(self.historial) <= MAX_MENSAJES_HISTORIAL + 1:
+            return
+
+        if self.historial[0].get("role") != "system":
+            return
+
+        system, resto = self.historial[0], self.historial[1:]
+
+        corte = len(resto) - MAX_MENSAJES_HISTORIAL
+        while corte < len(resto) and resto[corte].get("role") != "user":
+            corte += 1
+
+        if corte >= len(resto):
+            return  # no hay ningún punto de corte seguro; mejor no tocar nada
+
+        self.historial = [system] + resto[corte:]
+
 
     async def responder_directo(
         self,
@@ -646,6 +680,8 @@ class Agente:
 
         try:
             for _ in range(MAX_ITERACIONES_AGENTE):
+                self.recortar_historial()
+
                 stream = await client.chat.completions.create(
                     model=MODELO,
                     max_tokens=MAX_TOKENS,
@@ -883,13 +919,22 @@ class Agente:
                         
                         return
 
-                    salida = await ejecutar_tool(tc["name"], args, self.emitir)
+                    salida = str(await ejecutar_tool(tc["name"], args, self.emitir))
+
+                    # Válvula de seguridad: un resultado enorme se comería el
+                    # contexto entero. El tope de filas ya está en database.py;
+                    # esto cubre el caso de filas muy anchas.
+                    if len(salida) > MAX_CHARS_TOOL_RESULT:
+                        salida = (
+                            salida[:MAX_CHARS_TOOL_RESULT]
+                            + " …[resultado recortado: pide menos columnas o agrega los datos]"
+                        )
 
                     self.historial.append({
                         "role": "tool",
                         "tool_call_id": tc["id"],
                         "name": tc["name"],
-                        "content": str(salida),
+                        "content": salida,
                     })
 
         except Exception as e:

@@ -37,6 +37,16 @@ TEMPERATURA = 0.2
 # autocorrección de SQL o de JSON corrupto hacen falta más.
 MAX_ITERACIONES_AGENTE = 8
 
+# Mensajes de conversación que se conservan (sin contar el system prompt).
+# El contexto es de 8192 tokens y el system prompt + las tools ya se llevan
+# ~2.900: si el historial crece sin límite, Ollama acaba truncando por delante
+# y se pierde el system prompt, con lo que el agente deja de saber quién es.
+MAX_MENSAJES_HISTORIAL = 24
+
+# Tope de caracteres de un resultado de herramienta guardado en el historial.
+# Válvula de seguridad por si una consulta devuelve filas muy anchas.
+MAX_CHARS_TOOL_RESULT = 4000
+
 #===========================================================================
 # configuración de seguridad de operaciones
 #===========================================================================
@@ -150,6 +160,40 @@ WHERE importe < 0
 - Filtra por `categoria` cuando exista una que encaje; si no, busca en `comercio` o `descripcion` con LIKE.
 - Si la consulta falla, corrígela y reinténtalo (máximo 2 reintentos).
 - Para saldo actual usa siempre consultar_saldo, no SQL sobre cliente.
+
+Ejemplos de SQL para los casos que más se piden:
+
+1) Comparativa de este mes contra el mes pasado (una sola consulta, dos columnas):
+SELECT
+  ROUND(SUM(CASE WHEN strftime('%Y-%m', fecha) = strftime('%Y-%m', 'now')
+                 THEN -importe ELSE 0 END), 2) AS este_mes,
+  ROUND(SUM(CASE WHEN strftime('%Y-%m', fecha) = strftime('%Y-%m', 'now', '-1 month')
+                 THEN -importe ELSE 0 END), 2) AS mes_pasado
+FROM movimientos
+WHERE importe < 0;
+
+2) Evolución mensual de gastos (para gráficos de línea):
+SELECT strftime('%Y-%m', fecha) AS mes, ROUND(SUM(-importe), 2) AS gasto
+FROM movimientos
+WHERE importe < 0
+GROUP BY mes
+ORDER BY mes;
+
+3) Esta semana (la semana en curso empieza el lunes):
+SELECT ROUND(SUM(-importe), 2) AS gasto
+FROM movimientos
+WHERE importe < 0
+  AND fecha >= date('now', 'weekday 1', '-7 days');
+
+4) Nombre parcial de persona o comercio: SIEMPRE con LIKE y comodines a ambos lados.
+   Para "cuánto le he enviado a María":
+SELECT ROUND(SUM(-importe), 2) AS total
+FROM movimientos
+WHERE importe < 0
+  AND categoria = 'bizum_enviado'
+  AND comercio LIKE '%Mar%a%';
+
+- `analizar_suscripciones`: úsala SIEMPRE que pregunte a qué está suscrito, qué pagos fijos, periódicos o recurrentes tiene, cuánto le cuestan al mes o al año, si alguno le ha subido de precio o si alguno ha dejado de cobrarse. NO intentes deducirlo con SQL: la recurrencia no está escrita en ninguna columna y la herramienta ya calcula la cadencia, el coste mensual equivalente y los cambios de precio. La herramienta ya te devuelve el resultado clasificado, no lo reinterpretes: `suscripciones` son los servicios a los que está suscrito, `recibos_fijos` son recibos del hogar y obligaciones (alquiler, luz, agua, internet, seguro), `hay_subidas_de_precio` te dice si hubo alguna subida y `subidas_de_precio` cuáles. Si `hay_subidas_de_precio` es false, di que ninguna ha subido; si es true, nómbralas: nunca digas que no ha subido ninguna y acto seguido menciones una. Usa siempre `coste_mensual_estimado`, no el importe suelto de un recibo bimestral o anual.
 
 - `mostrar_grafico`: cuando el resultado tenga varios datos comparables, genera una visualización usando Vega-Lite v5. Debes elegir tú el tipo de gráfico más adecuado según los datos reales obtenidos y la intención del usuario. No uses plantillas fijas.
 

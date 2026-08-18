@@ -18,7 +18,12 @@ Diseño clave para el baremo:
 
 import json   #diccionarios de python a strings JSON
 
-from .banking_api import api_consultar_saldo, api_enviar_bizum, api_listar_contactos_bizum
+from .analitica import detectar_pagos_recurrentes
+from .banking_api import (
+    api_consultar_saldo,
+    api_enviar_bizum,
+    api_listar_contactos_bizum,
+)
 from .database import ejecutar_sql_seguro
 
 
@@ -78,6 +83,22 @@ TOOLS = [
         },
     },
     
+    # Analítica avanzada: la recurrencia no está escrita en ninguna columna,
+    # se infiere. Se resuelve en Python (determinista) en vez de pedirle al
+    # LLM que la deduzca por SQL, que es donde un modelo de 8B se rompe.
+    {
+        "name": "analizar_suscripciones",
+        "description": (
+            "Detecta los pagos recurrentes del cliente: suscripciones (Netflix, Spotify...), "
+            "cuotas (gimnasio) y recibos fijos (luz, agua, internet, alquiler). Úsala SIEMPRE "
+            "que pregunte a qué está suscrito, qué pagos fijos o periódicos tiene, cuánto le "
+            "cuestan al mes o al año, si alguno le ha subido de precio, o si alguno ha dejado "
+            "de cobrarse. No intentes deducir esto con SQL: esta herramienta ya calcula la "
+            "cadencia, el coste mensual equivalente y los cambios de precio."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+
     # Gráficos dinámicos: el LLM elige el tipo de gráfico y genera la spec Vega-Lite completa.
     {
         "name": "mostrar_grafico",
@@ -159,6 +180,7 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
 
     if nombre == "consultar_movimientos":
         resultado = ejecutar_sql_seguro(entrada.get("sql", ""))
+
         # El SQL se muestra en la interfaz (transparencia + material para la memoria)
         await emitir({
             "type": "sql",
@@ -167,6 +189,9 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
             "error": resultado.get("error"),
         })
         return json.dumps(resultado, ensure_ascii=False)
+
+    if nombre == "analizar_suscripciones":
+        return json.dumps(detectar_pagos_recurrentes(), ensure_ascii=False)
 
     if nombre == "mostrar_grafico":
         spec = entrada.get("spec")

@@ -1,7 +1,7 @@
 """
 Generación de la base de datos ficticia (requisito 2 del reto).
 
-Genera ~15 meses de movimientos realistas para un cliente español, con
+Genera ~24 meses de movimientos realistas para un cliente español, con
 patrones que hacen interesantes las preguntas del jurado:
 
 - Nómina mensual (día 28) y alquiler (día 2).
@@ -35,7 +35,20 @@ from .config import DB_PATH
 random.seed(42)  # reproducible
 
 HOY = date.today()
-INICIO = (HOY.replace(day=1) - timedelta(days=440)).replace(day=1)  # ~15 meses
+
+# 24 meses de histórico. Con la ventana anterior (~15 meses) solo entraba UN
+# cargo del seguro del coche, así que era imposible detectarlo como pago anual
+# y la pregunta "¿cuándo pagué el seguro?" se quedaba coja. Dos años dan dos
+# renovaciones y permiten además comparativas interanuales.
+INICIO = (HOY.replace(day=1) - timedelta(days=730)).replace(day=1)
+
+# Netflix sube de precio a mitad del histórico. Sin una subida en los datos, la
+# detección de cambios de precio de analitica.py no tiene nada sobre lo que
+# dispararse y "¿alguna suscripción me ha subido de precio?" siempre se
+# responde que no. Queda ~1 año a cada precio.
+SUBIDA_NETFLIX = (HOY.replace(day=1) - timedelta(days=365)).replace(day=1)
+PRECIO_NETFLIX_ANTIGUO = -13.99
+PRECIO_NETFLIX_NUEVO = -15.99
 
 # ── Catálogo de comercios por categoría ──────────────────────────────────────
 GASOLINERAS = ["Repsol", "Cepsa", "BP", "Galp", "Shell"]
@@ -68,7 +81,9 @@ def generar_movimientos() -> list[tuple]:
         # Ingresos y recibos fijos
         add(mes.replace(day=min(28, 28)), 2200.00, "nomina", "Empresa Tecnosur SL", "Nómina mensual")
         add(mes.replace(day=2), -650.00, "alquiler", "Inmobiliaria Genil", "Alquiler piso")
-        add(mes.replace(day=5), -13.99, "suscripciones", "Netflix", "Suscripción mensual Netflix")
+        add(mes.replace(day=5),
+            PRECIO_NETFLIX_ANTIGUO if mes < SUBIDA_NETFLIX else PRECIO_NETFLIX_NUEVO,
+            "suscripciones", "Netflix", "Suscripción mensual Netflix")
         add(mes.replace(day=7), -10.99, "suscripciones", "Spotify", "Suscripción mensual Spotify")
         add(mes.replace(day=3), -34.90, "gimnasio", "Gimnasio VivaFit", "Cuota mensual gimnasio")
         add(mes.replace(day=12), -21.50, "internet", "Digi", "Fibra + móvil")

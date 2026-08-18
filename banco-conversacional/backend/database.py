@@ -21,7 +21,14 @@ import sqlite3
 
 from .config import DB_PATH
 
-MAX_FILAS = 200
+# Tope de filas devueltas al LLM. Ojo: no es solo una cuestión de latencia.
+# El resultado entra entero en el historial de la conversación, y con un
+# contexto de 8192 tokens (ver arrancar_ollama.sh) del que el system prompt y
+# las tools ya ocupan ~2.900, un resultado de 200 filas desborda el contexto en
+# un solo turno: Ollama trunca por delante, se pierde el system prompt y la
+# calidad de las respuestas se cae sin que nada lo avise.
+# Para responder una pregunta agregada nunca hacen falta tantas filas.
+MAX_FILAS = 50
 
 # Palabras que jamás deberían aparecer en una consulta de lectura.
 _PROHIBIDAS = re.compile(
