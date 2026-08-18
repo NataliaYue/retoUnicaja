@@ -18,7 +18,7 @@ Diseño clave para el baremo:
 
 import json   #diccionarios de python a strings JSON
 
-from .banking_api import api_consultar_saldo, api_enviar_bizum
+from .banking_api import api_consultar_saldo, api_enviar_bizum, api_listar_contactos_bizum
 from .database import ejecutar_sql_seguro
 
 
@@ -38,10 +38,9 @@ TOOLS = [
     {
         "name": "enviar_bizum",
         "description": (
-            "Prepara un Bizum desde la cuenta del cliente. Úsala cuando el usuario "
-            "quiera enviar dinero e indique destinatario e importe. La llamada a esta "
-            "herramienta NO ejecuta inmediatamente el envío: el backend validará el "
-            "contacto y pedirá confirmación explícita antes de enviar dinero."
+           "Prepara un Bizum desde la cuenta del cliente. Úsala INMEDIATAMENTE en cuanto "
+            "el usuario mencione la intención de enviar dinero y un destinatario. "
+            "NUNCA des instrucciones sobre la aplicación ni pidas confirmación verbal."
         ),
         "input_schema": {
             "type": "object",
@@ -50,7 +49,7 @@ TOOLS = [
                 "cantidad": {"type": "number", "description": "Importe en euros (entre 0,50 y 1.000)."},
                 "concepto": {"type": "string", "description": "Concepto opcional del envío."},
             },
-            "required": ["destinatario", "cantidad"],
+            "required": ["destinatario"],
         },
     },
     
@@ -104,6 +103,21 @@ TOOLS = [
             "required": ["spec", "razonamiento"],
         },
     },
+    
+    {
+        "name": "listar_contactos_bizum",
+        "description": (
+            "Devuelve la lista exacta de contactos con los que el cliente ha operado "
+            "por Bizum. Úsala SIEMPRE Y DIRECTAMENTE si el usuario pregunta cuáles "
+            "son sus contactos, a quién puede enviar dinero, o si pide ver su agenda."
+        ),
+        "input_schema": {
+            "type": "object", 
+            "properties": {}, 
+            "required": []
+        },
+    },
+    
 ]
 
 
@@ -192,6 +206,10 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
             "estado": "ok",
             "detalle": "Gráfico mostrado al usuario en pantalla."
         }, ensure_ascii=False)
+        
+    if nombre == "listar_contactos_bizum":
+            resultado = api_listar_contactos_bizum()
+            return json.dumps(resultado, ensure_ascii=False)    
 
     return json.dumps({"error": f"Herramienta desconocida: {nombre}"})
 
