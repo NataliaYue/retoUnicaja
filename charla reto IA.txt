@@ -1,0 +1,80 @@
+################################################
+# RETO UNICAJA
+################################################
+
+65 estudiantes
+
+Se está creando un proyecto pionero llamado "banco conversacional" que pretende
+mejorar el día a día de los clientes. La idea es dar un asistente virtual para facilitar las 
+aplicaciones bancarias al sector "senior" y a los sectores con discapacidad. Romper barreras y la brecha digital <- IMPORTANTE ACCESIBILIDAD
+                       _________________________
+
+#=============================================================
+https://catedraiaunicaja.ugr.es/reto2.html
+#=============================================================
+
+
+#=============================================================
+# DUDAS PLANTEADAS POR LOS ASISTENTES
+#=============================================================
+
+-) PLAZOS: Finales de septiembre pero plazo no rígido una/dos semanas
+	-)Deadline --> entrega
+	-)Evaluación
+	-) Otro día taller virtual en el que se presenta y califica (mitad octubre). 
+           Quizá también alguna charla.
+	-) Pueden surgir oportunidades laborables
+	-) Si el proyecto es bueno puede llevarse a la vida real
+
+
+
+-) CRITERIOS: 
+	-) No solo caso de uso conversacional, sino que también deben aparecer gráficos 	   (información enriquecida, pantalla atractiva)
+	-) Imágenes visuales como logos de restaurantes, gasolineras...
+
+
+-) RAZONADOR elegido por nosotros. 
+
+
+-) No nos conectamos a los sistemas internos del banco. Contraseñas simuladas. 
+   SE VALORA SEGURIDAD
+    ____________________
+
+
+
+-) FORMATO MEMORIA: Pequeño video demo y memoria concisa en la que se explique qué hay que resolver y cómo funcionan el sistema y sus partes. No tipo TFG, sino arquitectura usada, cómo se comunican los componentes. No poner código. No valoran tamaño, sino contenido. Aceptan markdown y LaTex.
+
+
+
+-) BASE DE DATOS: ficticia creada por nosotros con unos cuatro clientes.
+
+
+
+-) INTERFAZ: suficiente con ordenador. Centrarse en que sea usable, no hace falta que sea usable en ios, Android...
+
+
+
+-) Aunque se valora la latencia, estamos hablando de un prototipo, por tanto se puede hablar qué hay que escalar pero no tiene que ir todo a la perfección.
+
+
+
+-) El asistente virtual debería centrarse solamente en el sector financiero. En otro caso, te diga que no puede responder. Aunque lo importante es que haga bien lo que debe hacer.
+
+
+
+-) Se valora también la escalabilidad. No rehacer el agente completo para añadir cosas nuevas.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
