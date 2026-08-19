@@ -525,11 +525,18 @@ class Agente:
                 return
 
             restantes = self.intentos_pin_restantes
-            await self.responder_directo(
+            
+            # 1. Guardamos el mensaje en una variable
+            mensaje_error = (
                 f"PIN incorrecto. Te {'queda' if restantes == 1 else 'quedan'} "
                 f"{restantes} {'intento' if restantes == 1 else 'intentos'}."
             )
-            await self.emitir({"type": "pedir_pin"})
+            
+            # 2. Lo mostramos en el chat como siempre
+            await self.responder_directo(mensaje_error)
+            
+            # 3. Y LO ENVIAMOS AL MODAL añadiendo "error": mensaje_error
+            await self.emitir({"type": "pedir_pin", "error": mensaje_error})
             return
 
         # Si el PIN es correcto, procedemos a ejecutar la herramienta

@@ -122,6 +122,9 @@
   .sugerencias button:hover{border-color:var(--verde); color:var(--verde)}
 
   .aviso-error{align-self:center; color:var(--rojo); font-size:13px; background:#FBEDE9; padding:8px 14px; border-radius:10px}
+  .aviso-error.oculto {
+    display: none;
+  }
   .aviso-sesion{align-self:center; color:var(--tinta-suave); font-size:13px; background:var(--verde-claro); padding:8px 14px; border-radius:10px; text-align:center}
 
   /* ── Barra de entrada ─────────────────────────────────── */
@@ -335,18 +338,18 @@ function iniciarSesion() {
 
   // Simulamos la validación en el frontend para el reto
   if (pass === "1234") {
-    // Ocultamos la pantalla de login
+    // Ocultamos la pantalla de login y el mensaje de error por si estaba visible
     document.getElementById('login-pantalla').classList.add('oculto');
+    msjError.classList.add('oculto'); 
     
-    // AHORA conectamos el WebSocket y el asistente arranca
+    // Conectamos el WebSocket y el asistente arranca
     conectar();
+  } else {
+    // ¡Aquí estaba el fallo! Faltaba el bloque else para contraseñas incorrectas
+    msjError.textContent = "Usuario o contraseña incorrectos.";
+    msjError.classList.remove('oculto');
   }
 }
-
-// Permitir pulsar "Enter" en el input de contraseña para entrar
-document.getElementById('login-pass').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') iniciarSesion();
-});
 
 function enviar(texto){
   texto = (texto || input.value).trim();
@@ -378,6 +381,19 @@ function manejarEvento(ev){
       break;
 
     case 'pedir_pin':
+      // Buscamos el párrafo subtítulo del modal
+      const subtituloPin = document.querySelector('.pin-container p');
+      
+      if (ev.error) {
+        // Si hay error, mostramos el texto en rojo
+        subtituloPin.textContent = ev.error;
+        subtituloPin.style.color = 'var(--rojo)';
+      } else {
+        // Estado normal por defecto
+        subtituloPin.textContent = 'Confirmación de operación';
+        subtituloPin.style.color = 'var(--tinta-suave)';
+      }
+      
       document.getElementById('pin-modal').classList.remove('oculto');
       clearPin();   // limpia también el PIN en memoria, no solo el display
       break;
