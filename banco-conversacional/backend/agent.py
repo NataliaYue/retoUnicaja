@@ -21,6 +21,7 @@ from .config import (
 )
 from .tools import TOOLS, ejecutar_tool
 from .banking_api import api_listar_contactos_bizum
+from .graficos import es_graficable, generar_spec
 
 # ==============================================================================
 # CONFIGURACIÓN DINÁMICA DEL PROVEEDOR
@@ -729,6 +730,12 @@ class Agente:
         texto_final = ""
         reintento_vacio = False
 
+        # Último resultado de `consultar_movimientos` de este turno, y si ya se
+        # ha pintado algo. Con los dos, al acabar el bucle se sabe si hubo datos
+        # graficables que se quedaron sin gráfico (ver el cierre del método).
+        ultimo_resultado_sql: dict | None = None
+        grafico_emitido = False
+
         try:
             for _ in range(MAX_ITERACIONES_AGENTE):
                 self.recortar_historial()
@@ -993,6 +1000,17 @@ class Agente:
 
                     salida = str(await ejecutar_tool(tc["name"], args, self.emitir))
 
+                    # Se anota lo justo para decidir el gráfico al cerrar el turno.
+                    if tc["name"] == "consultar_movimientos":
+                        try:
+                            ultimo_resultado_sql = json.loads(salida)
+                        except json.JSONDecodeError:
+                            ultimo_resultado_sql = None
+                    elif tc["name"] == "mostrar_grafico":
+                        # Solo cuenta si de verdad se pintó: una spec rechazada
+                        # devuelve {"error": ...} y ahí el gráfico sigue faltando.
+                        grafico_emitido = '"estado": "ok"' in salida
+
                     # Válvula de seguridad: un resultado enorme se comería el
                     # contexto entero. El tope de filas ya está en database.py;
                     # esto cubre el caso de filas muy anchas.
@@ -1025,3 +1043,24 @@ class Agente:
             await self.emitir({"type": "texto", "delta": texto_final})
 
         await self.emitir({"type": "fin_respuesta", "texto": texto_final.strip()})
+
+        # Red de seguridad del motor visual: si el turno trajo datos graficables
+        # y el agente no pintó nada, se pide la spec en una llamada dedicada.
+        #
+        # Va DESPUÉS de `fin_respuesta` a propósito. Ese evento es el que dispara
+        # el TTS en el frontend, así que ponerlo antes retrasaría la respuesta
+        # hablada los ~7 s que tarda la spec, que es exactamente la penalización
+        # de agilidad por la que ya se revirtió el intento anterior. Así el
+        # usuario oye la respuesta de inmediato y el gráfico aparece mientras
+        # la escucha.
+        if not grafico_emitido and ultimo_resultado_sql and es_graficable(ultimo_resultado_sql):
+            spec, razonamiento = await generar_spec(
+                client, MODELO, mensaje_usuario, ultimo_resultado_sql,
+                extra_body=EXTRA_BODY,
+            )
+            if spec:
+                await ejecutar_tool(
+                    "mostrar_grafico",
+                    {"spec": spec, "razonamiento": razonamiento},
+                    self.emitir,
+                )

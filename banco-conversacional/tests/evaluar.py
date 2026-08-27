@@ -161,9 +161,11 @@ def spec_pintable(spec) -> bool:
 
 async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos, espia) -> dict:
     eventos: list[dict] = []
+    instantes: list[float] = []
 
     async def emitir(evento):
         eventos.append(evento)
+        instantes.append(time.perf_counter())
 
     espia.clear()
     agente = Agente(emitir)
@@ -172,6 +174,17 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
     for turno in caso["turnos"]:
         await agente.procesar(turno)
     latencia = time.perf_counter() - inicio
+
+    # Agilidad percibida: cuándo se emite `fin_respuesta`, que es el evento que
+    # dispara el TTS en el frontend. Es lo que el usuario experimenta como
+    # "cuánto tarda". El gráfico del motor visual llega después a propósito, así
+    # que entra en `latencia` pero no en esta: medir solo el total penalizaría
+    # un trabajo que ya no bloquea la respuesta.
+    latencia_voz = next(
+        (t - inicio for e, t in zip(reversed(eventos), reversed(instantes))
+         if e["type"] == "fin_respuesta"),
+        latencia,
+    )
 
     sql_agente = next(
         (e["sql"] for e in reversed(eventos) if e["type"] == "sql" and not e.get("error")),
@@ -186,6 +199,7 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
         "tipo": caso["tipo"],
         "pregunta": caso["turnos"][-1],
         "latencia": round(latencia, 1),
+        "latencia_voz": round(latencia_voz, 1),
         "herramientas": list(espia),
         "sql_agente": sql_agente,
         "respuesta": respuesta,
@@ -330,8 +344,11 @@ def informe(resultados: list[dict], modelo: str) -> bool:
         print(f"  {'(diagnóstico) SQL vs referencia':32} {aciertos:3}/{total:<3}  {porcentaje:5.1f} %")
 
     latencias = [r["latencia"] for r in resultados]
-    print(f"{'Latencia mediana / máxima':34} {statistics.median(latencias):5.1f} s / "
-          f"{max(latencias):.1f} s")
+    voces = [r.get("latencia_voz", r["latencia"]) for r in resultados]
+    print(f"{'Latencia hasta la voz (mediana)':34} {statistics.median(voces):5.1f} s / "
+          f"{max(voces):.1f} s máx   <- lo que nota el usuario")
+    print(f"{'Latencia total (mediana)':34} {statistics.median(latencias):5.1f} s / "
+          f"{max(latencias):.1f} s máx   <- incluye el gráfico posterior")
 
     print()
     print("Por tipo de pregunta:")

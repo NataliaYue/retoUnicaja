@@ -294,6 +294,7 @@ const btnTts = document.getElementById('btnTts');
 let ws = null;
 let bloqueActual = null;   // contenedor de la respuesta en curso
 let burbujaActual = null;  // burbuja de texto en streaming
+let turnoActivo = false;   // hay un turno abierto (aún puede llegar más texto)
 let ttsActivo = false;     // hablar las respuestas en voz alta
 let ultimaEntradaFueVoz = false;
 
@@ -372,6 +373,7 @@ function manejarEvento(ev){
   switch (ev.type) {
 
     case 'inicio_respuesta':
+      turnoActivo = true;
       bloqueActual = document.createElement('div');
       bloqueActual.className = 'bloque-asistente';
       burbujaActual = document.createElement('div');
@@ -438,7 +440,11 @@ function manejarEvento(ev){
       vegaEmbed(vega, ev.spec, { actions:false }).catch(err => {
         vega.textContent = 'No se pudo renderizar el gráfico: ' + err.message;
       });
-      nuevaBurbuja();
+      // Solo si el turno sigue abierto. El gráfico del motor visual llega
+      // DESPUÉS de fin_respuesta —para no retrasar la voz—, y ahí una burbuja
+      // nueva se quedaría vacía enseñando el punto de "escribiendo" para
+      // siempre (ver .msg.asistente:empty::after).
+      if (turnoActivo) nuevaBurbuja();
       bajar();
       break;
     }
@@ -452,6 +458,7 @@ function manejarEvento(ev){
     }
 
     case 'fin_respuesta':
+      turnoActivo = false;
       if (burbujaActual && !burbujaActual.textContent) burbujaActual.remove();
       if (ev.texto && (ttsActivo || ultimaEntradaFueVoz)) hablar(ev.texto);
       ultimaEntradaFueVoz = false;

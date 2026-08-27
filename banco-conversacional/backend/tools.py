@@ -106,6 +106,14 @@ TOOLS = [
     },
 
     # Gráficos dinámicos: el LLM elige el tipo de gráfico y genera la spec Vega-Lite completa.
+    #
+    # El agente puede seguir llamándola por su cuenta, y cuando lo hace el gráfico
+    # es decisión suya de principio a fin. Lo que ha cambiado es que ya no es la
+    # ÚNICA vía: si termina el turno sin pintar y el resultado tenía algo que
+    # pintar, el backend lanza una llamada dedicada (ver graficos.py). Está
+    # medido que por sí solo no pinta en 5 de las 6 preguntas que deberían
+    # acabar en gráfico, y que esa decisión se mueve con cualquier edición del
+    # system prompt, aunque no hable de gráficos.
     {
         "name": "mostrar_grafico",
         "description": (

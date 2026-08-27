@@ -32,39 +32,6 @@
 
 ---
 
-# ✅ FASE 0 — Parar la hemorragia — **HECHA** (18 ago)
-
-Fallos que podían arruinar una demo en directo.
-
-- [x] **Crash que tumbaba el WebSocket**: en `gestionar_correccion_contacto_pendiente`
-      (`agent.py`), la rama de cancelación leía `self.bizum_pendiente` en vez de
-      `self.correccion_contacto_pendiente`, que ahí todavía es `None`.
-      Reproducido: *"Haz un bizum a Maria de 20 euros"* → *"¿Querías decir María López?"* → *"no"*
-      → `TypeError` → conexión muerta → historial perdido sin aviso. **Corregido y verificado.**
-- [x] **Incoherencia en el mismo flujo**: al aceptar la sugerencia de contacto se preguntaba
-      "¿Confirmas el envío?", pero cualquier "sí" caía en `gestionar_bizum_pendiente`, que solo
-      acepta cancelar y responde "introduce tu PIN". Ahora pide el PIN directamente y emite `pedir_pin`.
-- [x] **Blindaje**: `procesar` es ahora un envoltorio con `try/except` sobre `_procesar`, y el
-      handler del WS en `main.py` tiene su propia red de seguridad. Ninguna excepción puede cerrar
-      la conexión. Al fallar, se limpian `bizum_pendiente` y `correccion_contacto_pendiente`:
-      una operación de dinero a medias es peor que volver a empezarla.
-- [x] **`es_consulta_saldo` reescrito**. Antes hacía `substring` sobre expresiones genéricas y
-      secuestraba consultas de análisis. Ahora exige un disparador **y** que todas las palabras del
-      mensaje estén en una lista blanca: cualquier periodo, categoría o verbo extra descarta el atajo.
-      Diseñado asimétrico a propósito — un falso negativo solo cuesta latencia (el LLM tiene la
-      herramienta), un falso positivo da una respuesta incorrecta. Verificado con 18 casos:
-      - ahora van al LLM: "evolución de mi saldo este año", "cuál era mi saldo el mes pasado",
-        "cuánto me queda por pagar del alquiler", "cuánto tengo gastado en gasolina"
-      - siguen usando el atajo: "¿cuál es mi saldo?", "cuánto dinero tengo", "dime mi saldo"…
-- [x] **PIN con 3 intentos** (`INTENTOS_PIN` en `config.py`) y contador que se reinicia en cada
-      Bizum nuevo vía `dejar_bizum_pendiente()`. El PIN sale del código del agente a `config.py`
-      (`PIN_BIZUM`, sobreescribible por entorno) para que nunca pueda acercarse al prompt.
-- [x] **Timeout de 5 min → 30 min** (`TIMEOUT_WS_SEGUNDOS`), y el frontend avisa con una nota
-      visible cuando la sesión se reinicia, en vez de perder la memoria en silencio.
-- [x] `pedir_pin` ahora llama a `clearPin()`: antes solo vaciaba el display, no la variable en memoria.
-
----
-
 # 🟠 FASE 1 — Medir antes de tocar — **EN CURSO**
 
 - [x] **`tests/preguntas.jsonl`: 34 preguntas** cubriendo los tres tipos que nombra el reto y algo más:
@@ -224,14 +191,21 @@ de 2/6 a 3/6 pero disparaba la latencia de 4-24 s a 17-34 s, pagándola incluso 
 en gráfico. Mal cambio: 15 pts de agilidad por +1 gráfico de 6. **Decisión: mantener baja latencia
 y gráficos regulares por ahora.**
 
-- [ ] Arreglo bueno pendiente para la Fase 3: **llamada dedicada solo para el gráfico**. Tras un
+- [x] Arreglo bueno pendiente para la Fase 3: **llamada dedicada solo para el gráfico**. Tras un
       resultado graficable, hacer UNA petición aparte cuya única tarea sea devolver la spec
       Vega-Lite, con un prompt mínimo y solo los datos. Un modelo de 8B es mucho más fiable en una
-      tarea única que decidiendo entre responder y encadenar herramienta. Se puede lanzar en
-      paralelo con la redacción de la respuesta, así que no añade latencia percibida.
-- [ ] **Un gráfico llegó con `mark` a nulo** (13 datos, sin marca). `tools.py` solo valida que
+      tarea única que decidiendo entre responder y encadenar herramienta. ~~Se puede lanzar en
+      paralelo con la redacción de la respuesta, así que no añade latencia percibida.~~
+      **HECHO el 27 ago** (`backend/graficos.py`), con dos correcciones al plan — ver Fase 5.
+      El paralelo **no era viable**: `qwen3:8b` ocupa 6,6 GB de los 8 GB de la 4060 y no cabe un
+      segundo slot de KV cache, así que `OLLAMA_NUM_PARALLEL=2` no entra y Ollama serializa igual.
+      Se resolvió por orden de eventos, no por paralelismo.
+- [x] **Un gráfico llegó con `mark` a nulo** (13 datos, sin marca). `tools.py` solo valida que
       haya `data.values` — a propósito, para admitir `layer`/`concat` — así que una spec sin marca
-      pasa el filtro y luego falla en `vega-embed`. Revisar y dar mensaje claro al modelo.
+      pasa el filtro y luego falla en `vega-embed`. **Cerrado por partida doble el 27 ago**:
+      `evaluar.py` lo detecta ahora solo (métrica `spec_ok`, y se reprodujo en la primera
+      ejecución sin ir a buscarlo), y la llamada dedicada rechaza toda spec sin `mark` o sin
+      `encoding` antes de emitirla.
 
 ---
 
@@ -271,8 +245,10 @@ y gráficos regulares por ahora.**
 
 # 🟡 FASE 4 — Entregables (última semana)
 
-- [ ] **Regenerar `banco.db`** (`python -m backend.seed`): los datos se generan relativos a *hoy*.
-      Con una BD vieja, "este mes" sale vacío. Comprobado: el último movimiento es del 12 de agosto.
+- [x] **Regenerar `banco.db`** (`python -m backend.seed`): los datos se generan relativos a *hoy*.
+      Con una BD vieja, "este mes" sale vacío. **Hecha**: 1.035 movimientos entre 2024-08-01 y
+      2026-08-26. Ojo, **caduca sola**: hay que repetirlo antes del vídeo y antes de cada tanda
+      de evaluación, porque "esta semana" se vacía en cuanto pasan unos días.
 - [ ] **Vídeo demo** (5 pts): voz + consulta compleja + SQL visible + seguimiento contextual +
       gráfico y tabla + suscripciones + Bizum con PIN.
 - [ ] **Memoria técnica** (5 pts): arquitectura, diseño del agente y tools, text-to-SQL
@@ -292,10 +268,203 @@ y gráficos regulares por ahora.**
       — el context manager de sqlite3 solo hace commit/rollback. Afecta a `database.py` y a todo
       `banking_api.py`. Cada consulta deja un descriptor abierto.
 - [ ] Migrar `@app.on_event("startup")` (`main.py`) a `lifespan` (deprecado en FastAPI).
+
 - [ ] Error visible en la UI si Ollama no está arrancado (hoy sale un error críptico).
 - [ ] **Código muerto** en `index.html` (~línea 464): un bloque dentro de `if (Reconocedor)` lee
       `input.value` y hace `enviar()` en tiempo de carga de página, cuando el input siempre está
       vacío. Parece que debía ir dentro de `rec.onend`.
-- [ ] `retoCajaRural.zip` está commiteado dentro del propio repo.
-- [ ] Revisar la UI en móvil / ventana estrecha.
 
+
+
+---
+
+# ✅ FASE 5 — Bug del PIN, medición de gráficos y motor visual — **HECHA** (27 ago)
+
+Tres cambios. El hilo conductor: **casi todo lo que se arregló lo encontró la medición, no la
+vista**, y dos de las tres cosas que parecían mejoras resultaron no serlo al medirlas con
+repeticiones.
+
+## 5.1 — El PIN se pedía para operaciones que ya se sabía que iban a fallar 🔴
+
+El importe de un Bizum no se comprobaba hasta `api_enviar_bizum`, es decir, **después** de que el
+usuario tecleara su clave. Un envío de 2.000 € recorría el flujo entero — *"vas a enviar 2.000,00 €
+a María López, introduce tu PIN"* → teclado numérico → PIN → *"el importe debe estar entre 0,50 € y
+1.000 €"*. Pedir una clave para algo que no se va a ejecutar es malo en una demo y peor como diseño
+de seguridad.
+
+Los dos caminos habían divergido, que es el síntoma de la duplicación del flujo Bizum:
+
+| | `cantidad <= 0` | `cantidad > 1.000` |
+|---|---|---|
+| Vía regex (`preparar_bizum_desde_backend`) | ❌ no validaba | ❌ no validaba |
+| Vía LLM (tool call en `_procesar`) | ✅ preguntaba el importe | ❌ no validaba |
+
+- [x] `validar_importe_bizum()` en `agent.py`, llamada por **los dos caminos** antes de
+      `dejar_bizum_pendiente()`.
+- [x] Los límites viven en `config.py` (`BIZUM_MIN`, `BIZUM_MAX`, `BIZUM_LIMITE_DIARIO`) para que
+      agente y API no puedan decir cosas distintas. La API **los sigue comprobando por su cuenta**:
+      es la última palabra antes de mover dinero y no debe fiarse de quien la llama.
+- [x] Verificado: 2.000 € y 5.000 € se rechazan sin pedir PIN, 0 € pregunta cuánto, 20 € sigue
+      pidiendo PIN. Límites probados en 0,49 / 0,50 / 1.000,00 / 1.000,01.
+
+## 5.2 — Los 20 pts de gráficos ya se miden solos
+
+Se medían con rigor los 30 pts de precisión y los 20 de gráficos se comprobaban a ojo. Los eventos
+ya se recogían en `evaluar.py`, solo no se leían.
+
+- [x] **`grafico_ok`**, con las preguntas etiquetadas `espera_grafico`. Puntúa **en los dos
+      sentidos**: no pintar donde hay varios valores comparables es un fallo, y pintar donde la
+      respuesta es un único dato también, porque el criterio del propio system prompt lo prohíbe.
+- [x] **`spec_ok`**, aparte, porque es un fallo de otra cosa: `grafico_ok` mide al modelo
+      **decidiendo**, `spec_ok` al modelo **redactando**. Cazó el bug del `mark` a nulo en la
+      primera ejecución, sin ir a buscarlo (es intermitente, ~1 de 6).
+- [x] **Corregidas dos etiquetas mal puestas**: `gasto-categoria-top` y `comp-mes-mas-gasto`
+      devuelven **una fila con un solo número**, así que no pintarlas era lo correcto y se estaban
+      contando como fallo. Se puede defender lo contrario (pintar el desglose entero es mejor
+      GenUI), y por eso se dejan **sin puntuar** en vez de forzar una dirección, igual que se hace
+      con la comparación de SQL. Quedan 6 preguntas defendibles.
+- [x] **Latencia partida en dos**: *hasta la voz* (cuándo se emite `fin_respuesta`, que es lo que
+      dispara el TTS y por tanto lo que el usuario experimenta) y *total*. Medir solo el total
+      penalizaría trabajo que ya no bloquea la respuesta.
+
+### 🔴 Hallazgo: la decisión de pintar no la gobierna el prompt
+
+Medido sobre **4 variantes del system prompt × 3 vueltas de las 34 preguntas**:
+
+| pregunta (de las 6 defendibles) | viejo | v3 | v4 | v5 |
+|---|---|---|---|---|
+| gasto-top-comercios | 0/3 | 2/3 | 0/3 | 0/3 |
+| comp-mes-vs-anterior | 0/3 | 0/3 | 0/3 | 0/3 |
+| comp-super-vs-restaurantes | 0/3 | 2/3 | 2/3 | 0/3 |
+| comp-gasolina-6-meses | 0/3 | 3/3 | 3/3 | 0/3 |
+| comp-anio-vs-anterior | 0/3 | 0/3 | 0/3 | 0/3 |
+| comp-evolucion-mensual | 3/3 | 3/3 | 3/3 | 3/3 |
+
+Dentro de cada versión el comportamiento es casi determinista (0 o 3 de 3), pero **entre versiones
+la moneda se vuelve a tirar, y basta con editar dos líneas que ni siquiera hablan de gráficos**
+(v4 → v5 solo cambia las recetas de fechas y una regla de `consultar_saldo`, y los gráficos caen
+de 11/24 a 3/24). Solo pinta siempre la que lleva lenguaje visual explícito; dos no pintan jamás.
+
+Esto es más fuerte que el diagnóstico anterior ("la regla está a ~2.000 tokens de distancia"): la
+decisión **no depende de la distancia ni de la redacción**. Confirma que hacía falta el arreglo
+arquitectónico, y descarta seguir tocando el prompt para esto.
+
+## 5.3 — System prompt reescrito: 3.364 → 2.760 tokens
+
+Del 41 % del contexto al 34 %. Tenía una **contradicción directa** sobre `enviar_bizum` (poner
+`cantidad: 0` en una línea, omitir el parámetro seis líneas más abajo), la regla de no-Markdown
+**ocho veces**, la de gastos-en-positivo repetida, y `ESQUEMA_BD` incrustado a mitad de una frase
+por un salto de línea que faltaba.
+
+Verificado con un script que **ninguna de las 18 reglas ganadas midiendo se perdió**.
+
+Resultado con 3 vueltas (102 ejecuciones por configuración):
+
+| | viejo 3.364 t | v5 2.760 t |
+|---|---|---|
+| Elección de herramienta | 97,0 % | **97,0 %** |
+| Respuesta final | 91,7 % | **90,6 %** |
+| Latencia mediana | 3,2 s | **3,0 s** |
+
+Empate en precisión (un caso de 96, dentro del ±1 de varianza) con un 18 % menos de tokens en cada
+llamada. **Mejora modesta y segura, no la que parecía al principio.**
+
+### Tres regresiones que encontró la medición, no la vista
+
+Las tres las **causó la propia reescritura** y están corregidas:
+
+1. **Fechas adyacentes.** Poner *"este año"* y *"último año"* en la misma línea separados por un
+   `·` hizo que el modelo filtrara el año natural con `date('now','-1 year')`: respondía 6.687 €
+   donde eran 4.521 €. Tres casos, 0/3 los tres. **Comprimir juntó dos recetas casi idénticas y
+   creó una ambigüedad que el prompt largo no tenía.** Al corregirlo me pasé de frenada y eliminé
+   la receta de "últimos N meses", lo que rompió otra pregunta (3/3 → 0/3): la solución era
+   **contrastar** las dos, no quitar una.
+2. **Ejemplos sesgados.** Todos los ejemplos usaban `CASE` sobre fechas, así que al comparar dos
+   *categorías* el modelo copiaba el patrón y devolvía el mismo número dos veces (*"supermercado y
+   restaurantes son iguales: 6.203,17 €"*). Añadido el ejemplo del `CASE` sobre `categoria`.
+3. **Presión del gráfico.** Forzarlo con *"llámalo ANTES de redactar nada"* producía **5 respuestas
+   vacías de 102** (0 en el viejo), siempre tras un SQL correcto y **sin llegar a pintar**. Es
+   exactamente el patrón "mira el resultado y reacciona" que la Fase 1 ya había demostrado que no
+   funciona. Al soltarlo desaparecieron.
+
+### ⚠️ Lección de método
+
+Las dos primeras iteraciones se hicieron sobre **pases sueltos** y se interpretaron las
+regresiones como ruido. Eran señal: **la varianza real es de ±1 caso** y la caída era de 4. Con
+`--repeticiones 3` se ve a la primera. **No comparar configuraciones con una sola vuelta.**
+
+## 5.4 — Motor visual: `backend/graficos.py` 🆕
+
+El reparto de responsabilidades es lo que hace que funcione:
+
+| decisión | quién | ¿puntúa? |
+|---|---|---|
+| ¿**hay** algo que pintar? | backend, determinista | no — es la forma del resultado |
+| ¿**qué** marca? ¿qué encoding? ¿qué título? | **el LLM** | sí — "sin plantillas", 10 pts |
+| ¿**por qué** esa representación? | **el LLM** (`razonamiento`) | sí — lógica visual, 10 pts |
+
+- [x] **`es_graficable()`** — el gate. Dos formas dan gráfico: varias filas con alguna columna
+      numérica (serie o ranking), o **una fila con dos o más cifras** (comparación). Esa segunda
+      rama es la que el prompt nunca alcanzaba: *"¿cuánto he gastado este mes comparado con el
+      pasado?"* devuelve una sola fila con dos columnas. **Validado 15/15** contra las preguntas
+      etiquetadas antes de escribir una línea del resto.
+- [x] **`preparar_datos()`** — pivota de ancho a largo. Vega-Lite no sabe poner nombres de columna
+      en un eje sin un `transform`/`fold`, así que `{este_mes: 2036, mes_pasado: 2399}` se
+      convierte en dos filas `{serie, valor}`. Con eso al modelo solo le queda elegir la marca.
+- [x] **`generar_spec()`** — la llamada dedicada. **Le pide solo `title`, `mark`, `encoding` y
+      `razonamiento`: los datos los inyecta el backend**, que ya los tiene. Eso quita ~700 tokens
+      de generación por gráfico y elimina de raíz que se invente cifras. Nunca lanza: un gráfico
+      que falla no puede tumbar la respuesta.
+- [x] **`mostrar_grafico` se queda expuesta al LLM.** Si el modelo decide pintar, el gráfico es
+      100 % suyo; el backend solo actúa si el turno terminó sin gráfico. Quitarla habría eliminado
+      comportamiento agéntico que **sí funciona** (3/3 en *"muéstrame la evolución"*, en las cuatro
+      versiones del prompt) solo por simplificar.
+- [x] **La llamada va DESPUÉS de `fin_respuesta`**, y ese detalle es el que decide si el cambio es
+      bueno o malo. `fin_respuesta` es lo que dispara el TTS en el frontend, así que ponerla antes
+      retrasaría la respuesta hablada los ~7 s de la spec — la misma penalización de agilidad por
+      la que se revirtió el intento de la Fase 2. Ahora el usuario oye la respuesta de inmediato y
+      el gráfico aparece mientras la escucha.
+- [x] **Frontend**: un gráfico que llega tras `fin_respuesta` ya no crea una burbuja vacía, que se
+      habría quedado con el punto de "escribiendo" parpadeando para siempre
+      (`.msg.asistente:empty::after`). Flag `turnoActivo`.
+
+### Resultado (3 vueltas, 102 ejecuciones por configuración)
+
+| | antes de hoy | con motor visual |
+|---|---|---|
+| Elección de herramienta | 97,0 % | **97,0 %** |
+| Respuesta final correcta | 91,7 % (88/96) | **91,7 % (88/96)** |
+| **Gráfico cuando toca** | 16,7 % (3/18) | **83,3 % (15/18)** |
+| Specs que llegan a pintarse | 3/3 | **18/18** |
+| Latencia hasta la voz (mediana) | 3,2 s | **3,2 s** |
+| Respuestas vacías | 0 | **0** |
+
+Por pregunta, veces que pinta de 3:
+
+| | antes | ahora |
+|---|---|---|
+| gasto-top-comercios | 0 | **3** |
+| comp-mes-vs-anterior | 0 | **3** |
+| comp-super-vs-restaurantes | 0 | **3** |
+| comp-anio-vs-anterior | 0 | **3** |
+| comp-evolucion-mensual | 3 | 3 |
+| comp-gasolina-6-meses | 0 | 0 ← fallo de SQL, no del motor |
+
+**Cuatro de las cinco preguntas que no pintaban nunca ahora pintan 3/3**, con la precisión intacta
+(88/96 exactos en ambos, no una aproximación) y **sin coste de agilidad**: la mediana hasta la voz
+no se mueve porque el gráfico va después de `fin_respuesta`. Es el mismo objetivo del intento de la
+Fase 2, que se revirtió por subir la latencia de 4-24 s a 17-34 s; la diferencia está en dónde se
+coloca la llamada, no en cuánto se insiste en el prompt.
+
+---
+
+# 🔵 Pendiente después de la Fase 5
+
+- [ ] **`compara ... en los últimos seis meses` no agrupa por mes.** El modelo escribe un `SUM`
+      total, así que el resultado es un único dato y el gate hace bien en no pintarlo. El fallo es
+      de SQL: *"compara"* debería implicar desglose. Se arregla en el prompt, no en el motor.
+- [ ] **Deuda que sigue viva**: `agent.py` va por ~1.000 líneas y el flujo Bizum sigue escrito dos
+      veces (`preparar_bizum_desde_backend` y la rama del tool call). La Fase 5.1 tapó la
+      divergencia, pero no la causa. Extraer un `iniciar_bizum()` común, o un `bizum.py`.
+- [ ] **Tablas (`mostrar_tabla`)** y **proyección de gasto**: siguen pendientes de la Fase 3, y
+      ahora hay con qué medirlas.
