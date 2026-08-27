@@ -12,6 +12,7 @@ y siempre con parámetros ligados (?), nunca con SQL construido por el LLM.
 
 from datetime import date
 
+from .config import BIZUM_LIMITE_DIARIO, BIZUM_MAX, BIZUM_MIN
 from .database import conexion_escritura, conexion_lectura
 
 
@@ -57,13 +58,11 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
         return {"estado": "error", "motivo": "Falta el destinatario."}
 
     cantidad = round(float(cantidad), 2)
-    if not (0.50 <= cantidad <= 1000.00):
+    if not (BIZUM_MIN <= cantidad <= BIZUM_MAX):
         return {
             "estado": "error",
             "motivo": "El importe de un Bizum debe estar entre 0,50 € y 1.000 €.",
         }
-
-    LIMITE_DIARIO_BOT = 500.00  # Límite de seguridad del asistente
 
     with conexion_escritura() as conn:
         # 1. Comprobar el límite diario acumulado
@@ -79,10 +78,10 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
         # Si no hay envíos hoy, será None. Si los hay, será un número negativo.
         gastado_hoy = abs(fila_gastado["total_hoy"] or 0.0)
 
-        if gastado_hoy + cantidad > LIMITE_DIARIO_BOT:
+        if gastado_hoy + cantidad > BIZUM_LIMITE_DIARIO:
             return {
                 "estado": "error",
-                "motivo": f"Operación denegada. El límite diario del asistente es {LIMITE_DIARIO_BOT:.2f} € y ya has enviado {gastado_hoy:.2f} € hoy."
+                "motivo": f"Operación denegada. El límite diario del asistente es {BIZUM_LIMITE_DIARIO:.2f} € y ya has enviado {gastado_hoy:.2f} € hoy."
             }
 
         # 2. Comprobar saldo suficiente

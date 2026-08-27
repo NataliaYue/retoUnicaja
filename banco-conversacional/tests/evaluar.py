@@ -3,7 +3,7 @@ Evaluación de la precisión del asistente (30 pts del baremo).
 
 Lanza las preguntas de `preguntas.jsonl` contra el agente real.
 
-PUNTÚAN DOS COSAS, porque fallan por motivos distintos:
+PUNTÚAN TRES COSAS, porque fallan por motivos distintos:
 
   1. ELECCIÓN DE HERRAMIENTA. ¿Llamó a la que tocaba? Preguntar por
      suscripciones y que se ponga a escribir SQL es un fallo aunque el número
@@ -14,13 +14,28 @@ PUNTÚAN DOS COSAS, porque fallan por motivos distintos:
   2. RESPUESTA FINAL. Es lo único que oye el usuario. Se comprueba que los
      valores esperados aparezcan en el texto, con formato español.
 
-Y SE MIDE, SIN PUNTUAR, un tercer indicador de DIAGNÓSTICO: se ejecutan la
-consulta del agente y una de referencia escrita a mano y se comparan los
-valores. Sirve para saber POR QUÉ falló una respuesta, pero no cuenta para la
-nota: el modelo puede elegir una interpretación distinta y defendible (otro
-periodo, otra forma de calcular una media) y divergir de la referencia sin
-estar equivocado. Nunca se compara el TEXTO del SQL: hay muchas consultas
-correctas distintas para la misma pregunta.
+  3. GRÁFICO CUANDO TOCA. Son 20 pts del baremo (lógica visual + gráficos sin
+     plantillas), más que ninguna otra cosa salvo la precisión. Los casos con
+     `espera_grafico` se puntúan en los dos sentidos: no pintar donde hay
+     varios valores comparables es un fallo, y pintar donde la respuesta es un
+     único dato también, porque el criterio del propio system prompt lo
+     prohíbe. Se lee del evento `grafico` del WebSocket, así que mide lo que
+     de verdad le llega al frontend.
+
+  4. SPEC PINTABLE. Que llegue un gráfico no significa que se vea: una spec
+     sin `mark` pasa el filtro de `tools.py` (que solo exige `data.values`,
+     a propósito, para admitir layer y concat) y revienta después en
+     `vega-embed`, donde ya no lo registra nadie. Puntúa, y va aparte de la
+     métrica 3 porque son fallos de cosas distintas: uno es el modelo
+     decidiendo si toca gráfico, el otro el modelo redactando la spec.
+
+Y SE MIDE, SIN PUNTUAR, un indicador de DIAGNÓSTICO: se ejecutan la consulta
+del agente y una de referencia escrita a mano y se comparan los valores. Sirve
+para saber POR QUÉ falló una respuesta, pero no cuenta para la nota: el modelo
+puede elegir una interpretación distinta y defendible (otro periodo, otra
+forma de calcular una media) y divergir de la referencia sin estar equivocado.
+Nunca se compara el TEXTO del SQL: hay muchas consultas correctas distintas
+para la misma pregunta.
 
 La base de datos es reproducible (`random.seed(42)` en seed.py), así que los
 valores esperados se recalculan en cada ejecución y no caducan. Eso sí, hay
@@ -101,6 +116,46 @@ def aparece_en(valor, texto: str) -> bool:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Gráficos
+# ──────────────────────────────────────────────────────────────────────────
+
+def _busca_clave(spec, clave: str) -> bool:
+    """True si `clave` aparece con valor no vacío en la spec o en alguna vista anidada."""
+    if not isinstance(spec, dict):
+        return False
+
+    if spec.get(clave):
+        return True
+
+    for contenedor in ("layer", "hconcat", "vconcat", "concat"):
+        hijos = spec.get(contenedor)
+        if isinstance(hijos, list) and any(_busca_clave(h, clave) for h in hijos):
+            return True
+
+    # facet / repeat envuelven la vista real en spec.spec
+    if isinstance(spec.get("spec"), dict):
+        return _busca_clave(spec["spec"], clave)
+
+    return False
+
+
+def spec_pintable(spec) -> bool:
+    """
+    Una spec necesita marca y encoding, no solo datos, para llegar a pintarse.
+
+    `tools.py` solo exige `data.values` —a propósito, para admitir layer y
+    concat— así que una spec con `mark` a nulo pasa el filtro del backend,
+    el agente da el gráfico por mostrado y luego falla en `vega-embed`, donde
+    ya no lo ve nadie. Aquí sí queda registrado.
+
+    Se busca cada clave en todo el árbol en vez de exigirlas en la raíz: en un
+    `layer` la marca vive en los hijos y el encoding puede estar heredado del
+    padre, y exigir ambas en el mismo nivel daría fallos falsos.
+    """
+    return _busca_clave(spec, "mark") and _busca_clave(spec, "encoding")
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Ejecución de un caso
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -124,6 +179,7 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
     )
     finales = [e for e in eventos if e["type"] == "fin_respuesta"]
     respuesta = finales[-1]["texto"] if finales else ""
+    graficos = [e for e in eventos if e["type"] == "grafico"]
 
     resultado = {
         "id": caso["id"],
@@ -133,9 +189,13 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
         "herramientas": list(espia),
         "sql_agente": sql_agente,
         "respuesta": respuesta,
+        "graficos": len(graficos),
+        "razonamiento": graficos[-1].get("razonamiento", "") if graficos else "",
         "tool_ok": None,
         "valores_ok": None,
         "respuesta_ok": None,
+        "grafico_ok": None,
+        "spec_ok": None,
     }
 
     # 1. Herramienta correcta. Admite una lista: a veces hay más de una vía
@@ -195,6 +255,27 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
             normalizar(t) in normalizar(respuesta) for t in caso["contiene_alguno"]
         )
 
+    # 4. Gráfico cuando toca (20 pts del baremo: lógica visual + sin plantillas).
+    # Se puntúa en los dos sentidos: no pintar donde hay varios valores
+    # comparables es un fallo, y pintar donde la respuesta es un único dato
+    # también, porque el criterio del prompt dice explícitamente que no.
+    if "espera_grafico" in caso:
+        resultado["grafico_ok"] = bool(graficos) == caso["espera_grafico"]
+
+    # Una spec puede llegar y aun así no pintarse. Va separado de `grafico_ok`
+    # porque son fallos de cosas distintas: uno es del modelo decidiendo si
+    # toca gráfico, el otro del modelo redactando la spec.
+    if graficos:
+        resultado["spec_ok"] = all(spec_pintable(e["spec"]) for e in graficos)
+
+        if not resultado["spec_ok"]:
+            # Las claves de la spec rota, para saber qué faltó sin volcar los
+            # datos enteros en el informe.
+            resultado["claves_spec"] = [
+                sorted(e["spec"].keys()) if isinstance(e["spec"], dict) else type(e["spec"]).__name__
+                for e in graficos if not spec_pintable(e["spec"])
+            ]
+
     return resultado
 
 
@@ -206,17 +287,24 @@ def marca(valor) -> str:
     return "  " if valor is None else ("OK" if valor else "XX")
 
 
+def es_fallo(r: dict) -> bool:
+    """Un caso falla si suspende cualquiera de las métricas que puntúan."""
+    return any(r[clave] is False
+               for clave in ("tool_ok", "respuesta_ok", "grafico_ok", "spec_ok"))
+
+
 def informe(resultados: list[dict], modelo: str) -> bool:
     print()
     print("=" * 100)
     print(f"RESULTADOS  ·  modelo: {modelo}")
     print("=" * 100)
-    print(f"{'id':28} {'tipo':13} {'tool':5} {'sql':4} {'resp':5} {'seg':>6}  pregunta")
+    print(f"{'id':28} {'tipo':13} {'tool':5} {'sql':4} {'resp':5} {'graf':5} {'seg':>6}  pregunta")
     print("-" * 100)
 
     for r in resultados:
         print(f"{r['id']:28} {r['tipo']:13} "
               f"{marca(r['tool_ok']):5} {marca(r['valores_ok']):4} {marca(r['respuesta_ok']):5} "
+              f"{marca(r['grafico_ok']):5} "
               f"{r['latencia']:6.1f}  {r['pregunta'][:36]}")
 
     def tasa(clave):
@@ -230,7 +318,9 @@ def informe(resultados: list[dict], modelo: str) -> bool:
     print("-" * 100)
     print("PUNTUACIÓN")
     for clave, etiqueta in (("tool_ok", "Elección de herramienta"),
-                            ("respuesta_ok", "Respuesta final correcta")):
+                            ("respuesta_ok", "Respuesta final correcta"),
+                            ("grafico_ok", "Gráfico cuando toca"),
+                            ("spec_ok", "Specs que llegan a pintarse")):
         porcentaje, aciertos, total = tasa(clave)
         if porcentaje is not None:
             print(f"  {etiqueta:32} {aciertos:3}/{total:<3}  {porcentaje:5.1f} %")
@@ -248,12 +338,10 @@ def informe(resultados: list[dict], modelo: str) -> bool:
     tipos = sorted({r["tipo"] for r in resultados})
     for tipo in tipos:
         del_tipo = [r for r in resultados if r["tipo"] == tipo]
-        fallos = [r for r in del_tipo
-                  if r["respuesta_ok"] is False or r["tool_ok"] is False]
+        fallos = [r for r in del_tipo if es_fallo(r)]
         print(f"   {tipo:14} {len(del_tipo) - len(fallos):2}/{len(del_tipo):<2} correctas")
 
-    fallidos = [r for r in resultados
-                if r["respuesta_ok"] is False or r["tool_ok"] is False]
+    fallidos = [r for r in resultados if es_fallo(r)]
     if fallidos:
         print()
         print("FALLOS EN DETALLE")
@@ -267,6 +355,18 @@ def informe(resultados: list[dict], modelo: str) -> bool:
                 print(f"   esperado:     {r['esperados']}")
             if r.get("obtenidos") is not None:
                 print(f"   obtenido:     {r['obtenidos']}")
+            if r["grafico_ok"] is False:
+                if r["graficos"]:
+                    detalle = f"{r['graficos']} gráfico(s), no se esperaba ninguno"
+                else:
+                    detalle = "ninguno, se esperaba uno"
+                print(f"   gráfico:      {detalle}")
+            if r["spec_ok"] is False:
+                print(f"   spec:         llega sin mark o sin encoding (no se pinta)")
+                for claves in r.get("claves_spec", []):
+                    print(f"                 claves recibidas: {claves}")
+            if r["razonamiento"]:
+                print(f"   razonamiento: {r['razonamiento'][:120]}")
             print(f"   respuesta:    {r['respuesta'][:150]}")
 
     return not fallidos

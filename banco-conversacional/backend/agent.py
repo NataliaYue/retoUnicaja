@@ -7,6 +7,8 @@ from difflib import get_close_matches
 from openai import AsyncOpenAI
 
 from .config import (
+    BIZUM_MAX,
+    BIZUM_MIN,
     INTENTOS_PIN,
     MAX_CHARS_TOOL_RESULT,
     MAX_ITERACIONES_AGENTE,
@@ -134,6 +136,34 @@ def formatear_euros(cantidad: float) -> str:
     texto = f"{cantidad:,.2f}"
     return texto.replace(",", "X").replace(".", ",").replace("X", ".") + " €"
 
+
+def validar_importe_bizum(cantidad: float) -> str | None:
+    """
+    Devuelve el motivo por el que este importe no se puede enviar, o None si
+    es válido.
+
+    Aplica los mismos límites que `api_enviar_bizum`, pero ANTES de dejar el
+    Bizum pendiente. Si solo valida la API, el usuario recorre todo el flujo
+    ("vas a enviar 2.000 € a María López, introduce tu PIN"), teclea su clave
+    y solo entonces se le dice que el importe no era válido: se le ha pedido
+    la clave para una operación que ya se sabía que iba a fallar.
+
+    La API sigue comprobándolo por su cuenta: es la última palabra antes de
+    mover dinero y no debe fiarse de que quien la llama haya validado nada.
+    """
+    if cantidad < BIZUM_MIN:
+        return (
+            f"El importe mínimo de un Bizum es {formatear_euros(BIZUM_MIN)}, "
+            f"así que no puedo enviar {formatear_euros(cantidad)}."
+        )
+
+    if cantidad > BIZUM_MAX:
+        return (
+            f"El importe máximo de un Bizum es {formatear_euros(BIZUM_MAX)}, "
+            f"así que no puedo enviar {formatear_euros(cantidad)}."
+        )
+
+    return None
 
 
 def limpiar_markdown_respuesta(texto: str) -> str:
@@ -571,6 +601,20 @@ class Agente:
         cantidad = round(float(datos.get("cantidad", 0)), 2)
         concepto = datos.get("concepto", "").strip()
 
+        # El importe se comprueba lo primero, antes de validar el contacto y
+        # antes de pedir el PIN: si no cabe en los límites, no hay operación
+        # que confirmar.
+        if cantidad <= 0:
+            await self.responder_directo(
+                f"¿Cuánto dinero quieres enviarle a {destinatario_original}?"
+            )
+            return
+
+        error_importe = validar_importe_bizum(cantidad)
+        if error_importe:
+            await self.responder_directo(error_importe)
+            return
+
         validacion = buscar_contacto_bizum(destinatario_original)
 
         if validacion["estado"] == "no_encontrado":
@@ -832,6 +876,27 @@ class Agente:
                             
                             await self.responder_directo(texto, emitir_inicio=False)
                             return
+
+                        # Mismo control que en la vía del backend: el importe
+                        # se rechaza aquí, no después de haber pedido el PIN.
+                        error_importe = validar_importe_bizum(cantidad)
+                        if error_importe:
+                            self.historial.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "name": tc["name"],
+                                "content": json.dumps({
+                                    "estado": "error",
+                                    "motivo": error_importe,
+                                }, ensure_ascii=False),
+                            })
+
+                            await self.responder_directo(
+                                error_importe,
+                                emitir_inicio=False,
+                            )
+                            return
+
                         concepto = args.get("concepto", "").strip()
 
                         validacion = buscar_contacto_bizum(destinatario)

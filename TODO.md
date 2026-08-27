@@ -232,11 +232,6 @@ y gráficos regulares por ahora.**
 - [ ] **Un gráfico llegó con `mark` a nulo** (13 datos, sin marca). `tools.py` solo valida que
       haya `data.values` — a propósito, para admitir `layer`/`concat` — así que una spec sin marca
       pasa el filtro y luego falla en `vega-embed`. Revisar y dar mensaje claro al modelo.
-- [ ] **Ninguna suscripción cambia de precio en los datos**, así que la rama de detección de
-      subidas está implementada pero no se puede demostrar. Una subida de Netflix a mitad del
-      histórico (una línea en `seed.py`) daría un momento muy bueno de vídeo.
-      Ollama trunca por delante, se pierde el system prompt y la calidad se cae. Bajar el límite
-      y recortar/resumir el historial.
 
 ---
 

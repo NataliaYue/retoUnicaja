@@ -5,49 +5,49 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "banco-conversacional/backend/agent.py": {
-    "mtime": 1783947020.4557867,
-    "ast_hash": "20e94170b87a718082fe17efe7e56924",
-    "semantic_hash": "20e94170b87a718082fe17efe7e56924"
+    "mtime": 1787793240.027234,
+    "ast_hash": "02bdebccb3de377f5e34250f49ae8469",
+    "semantic_hash": "02bdebccb3de377f5e34250f49ae8469"
   },
   "banco-conversacional/backend/banking_api.py": {
-    "mtime": 1783946897.411619,
-    "ast_hash": "8582f546419624e95af1fe7c5dd85788",
-    "semantic_hash": "8582f546419624e95af1fe7c5dd85788"
+    "mtime": 1787063335.0989716,
+    "ast_hash": "59715bf246e013300d772415f96bf410",
+    "semantic_hash": "59715bf246e013300d772415f96bf410"
   },
   "banco-conversacional/backend/config.py": {
-    "mtime": 1783947014.898998,
-    "ast_hash": "25c51d23de056cac11087cd5e504f941",
-    "semantic_hash": "25c51d23de056cac11087cd5e504f941"
+    "mtime": 1787792233.5129032,
+    "ast_hash": "7ccd05c8b36a11ca2b1504eda0402b87",
+    "semantic_hash": "7ccd05c8b36a11ca2b1504eda0402b87"
   },
   "banco-conversacional/backend/database.py": {
-    "mtime": 1783670645.1037896,
-    "ast_hash": "07467b6b98df48b7c5c6cf2c0c530ea6",
-    "semantic_hash": "07467b6b98df48b7c5c6cf2c0c530ea6"
+    "mtime": 1787071488.0161,
+    "ast_hash": "de786f14df7a35482554b382d80f95a6",
+    "semantic_hash": "de786f14df7a35482554b382d80f95a6"
   },
   "banco-conversacional/backend/main.py": {
-    "mtime": 1783670645.1037896,
-    "ast_hash": "08886afd907108054ed2324de77a449e",
-    "semantic_hash": "08886afd907108054ed2324de77a449e"
+    "mtime": 1787065567.0173862,
+    "ast_hash": "b3002b9593feb6bdb79bb513bf128d7c",
+    "semantic_hash": "b3002b9593feb6bdb79bb513bf128d7c"
   },
   "banco-conversacional/backend/seed.py": {
-    "mtime": 1783670645.1037896,
-    "ast_hash": "722751104b7dc257cf290ba335d1f161",
-    "semantic_hash": "722751104b7dc257cf290ba335d1f161"
+    "mtime": 1787071488.0163882,
+    "ast_hash": "c2d97d02cca7d76223d48bc089e770f9",
+    "semantic_hash": "c2d97d02cca7d76223d48bc089e770f9"
   },
   "banco-conversacional/backend/tools.py": {
-    "mtime": 1783946941.2995791,
-    "ast_hash": "ab157983f85246bd2284d3ae25f3d46d",
-    "semantic_hash": "ab157983f85246bd2284d3ae25f3d46d"
+    "mtime": 1787792829.135631,
+    "ast_hash": "7ae15cfa4298698515c886cf984d070d",
+    "semantic_hash": "7ae15cfa4298698515c886cf984d070d"
   },
   "README.md": {
-    "mtime": 1783670645.1019168,
-    "ast_hash": "83250fc9242799d798cf515ae4df9a01",
-    "semantic_hash": "83250fc9242799d798cf515ae4df9a01"
+    "mtime": 1787063335.0989716,
+    "ast_hash": "44a223288b468f622f24b8dd748ff211",
+    "semantic_hash": "44a223288b468f622f24b8dd748ff211"
   },
   "TODO.md": {
-    "mtime": 1783947194.2287276,
-    "ast_hash": "7c33b9cc40f5931f8e02a23143a12498",
-    "semantic_hash": "7c33b9cc40f5931f8e02a23143a12498"
+    "mtime": 1787793137.6505537,
+    "ast_hash": "ce652551bb327d3c7ef666656ace0f12",
+    "semantic_hash": "ce652551bb327d3c7ef666656ace0f12"
   },
   "banco-conversacional/README.md": {
     "mtime": 1783670645.1036,
@@ -55,13 +55,43 @@
     "semantic_hash": "c1771f0f71edef2a6c6228dfd68fca9e"
   },
   "banco-conversacional/frontend/index.html": {
-    "mtime": 1783670645.1037896,
-    "ast_hash": "def541efdadf3574346a8d91fce4e3af",
-    "semantic_hash": "def541efdadf3574346a8d91fce4e3af"
+    "mtime": 1787790342.9730952,
+    "ast_hash": "9219df6b16990148e924c928f79c9249",
+    "semantic_hash": "9219df6b16990148e924c928f79c9249"
   },
   "banco-conversacional/requirements.txt": {
     "mtime": 1783670645.1037896,
     "ast_hash": "fd7501893e0610f33c22d52815ed3908",
     "semantic_hash": "fd7501893e0610f33c22d52815ed3908"
+  },
+  "banco-conversacional/arrancar_ollama.sh": {
+    "mtime": 1786528479.9095006,
+    "ast_hash": "1367b98d5fc7183fd99740b0f69c3d8c",
+    "semantic_hash": "1367b98d5fc7183fd99740b0f69c3d8c"
+  },
+  "banco-conversacional/backend/analitica.py": {
+    "mtime": 1787071488.0156512,
+    "ast_hash": "0fe9d25c09d8c58bbee6a0646db2945a",
+    "semantic_hash": "0fe9d25c09d8c58bbee6a0646db2945a"
+  },
+  "banco-conversacional/tests/__init__.py": {
+    "mtime": 1787071488.0166173,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "banco-conversacional/tests/evaluar.py": {
+    "mtime": 1787792260.922409,
+    "ast_hash": "8dfdf1b3a0451f095f60ce54367c6cf0",
+    "semantic_hash": "8dfdf1b3a0451f095f60ce54367c6cf0"
+  },
+  "banco-conversacional/tests/test_recurrencia.py": {
+    "mtime": 1787071488.0168254,
+    "ast_hash": "5f6b65d8fe39047264a1521a433cdf42",
+    "semantic_hash": "5f6b65d8fe39047264a1521a433cdf42"
+  },
+  "charla reto IA.txt": {
+    "mtime": 1787066133.404876,
+    "ast_hash": "a829ca18d98dbe8edc595675d9b92954",
+    "semantic_hash": "a829ca18d98dbe8edc595675d9b92954"
   }
 }
