@@ -35,7 +35,13 @@ TOOLS = [
     # Tool sin argumentos: solo consulta y devuelve el saldo actual. 
     {
         "name": "consultar_saldo",
-        "description": "Consulta el saldo actual de la cuenta del cliente a través de la API del banco.",
+        "description": (
+            "Consulta el saldo actual de la cuenta DEL TITULAR con el que estás hablando, "
+            "a través de la API del banco. Solo existe esa cuenta: no puedes consultar la de "
+            "ninguna otra persona. Si te preguntan por el saldo de otro (por ejemplo, de un "
+            "contacto de Bizum), NO llames a esta herramienta: no devolvería su saldo sino el "
+            "del titular, y responderías con el dato de otra persona."
+        ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     

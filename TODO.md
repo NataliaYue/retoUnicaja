@@ -65,15 +65,67 @@ Fallos que podían arruinar una demo en directo.
 
 ---
 
-# 🟠 FASE 1 — Medir antes de tocar (3-4 días)
+# 🟠 FASE 1 — Medir antes de tocar — **EN CURSO**
 
-Sin esto todo lo demás son corazonadas, y no hay nada que contar en la memoria.
+- [x] **`tests/preguntas.jsonl`: 34 preguntas** cubriendo los tres tipos que nombra el reto y algo más:
+      gastos (9), comparativas (6), suscripciones (5), seguimiento (4), bizum (3), saldo (2),
+      ingresos (2), ambiguas (1), límites (2).
+- [x] **`tests/evaluar.py`**: lanza cada pregunta contra el agente real y mide **tres cosas
+      independientes**, porque fallan por motivos distintos:
+      1. **Elección de herramienta** — preguntar por suscripciones y que se ponga a escribir SQL
+         es un fallo aunque el número salga bien. Se registra con un espía sobre `ejecutar_tool`,
+         así se ven también los atajos del backend, que no pasan por el historial del LLM.
+      2. **Precisión de ejecución del SQL** — no se compara el *texto* de la consulta (hay muchas
+         consultas correctas distintas): se ejecutan la del agente y una de referencia escrita a
+         mano, y se comparan los **valores**. Es la métrica estándar en text-to-SQL y es la única
+         que no penaliza el estilo.
+      3. **Respuesta final** — que el SQL sea correcto no garantiza que el modelo traslade bien la
+         cifra. Se comprueba que los valores aparezcan en el texto, con formato español.
+- [x] Los valores esperados **se recalculan en cada ejecución** desde la BD, así que no caducan al
+      regenerar (`random.seed(42)` la hace reproducible).
+- [x] **Puntúan dos cosas: herramienta y respuesta final.** La comparación del SQL contra una
+      consulta de referencia se mide pero **no puntúa**: es diagnóstico. El modelo puede elegir una
+      interpretación distinta y defendible (otro periodo, otra forma de calcular una media) y
+      divergir de la referencia sin estar equivocado. Lo que cuenta es lo que oye el usuario.
 
-- [ ] `tests/preguntas.jsonl`: ~30 preguntas cubriendo los tres tipos que nombra el reto
-      (**gastos, comparativas, suscripciones**) + ambiguas + de seguimiento ("¿y esta semana?").
-- [ ] Runner que las lanza contra el agente y mide **acierto del SQL** y **latencia**
-      (primer token, respuesta completa, con y sin gráfico).
-- [ ] Tabla de resultados → material directo para la memoria y detección de regresiones.
+### Resultados (qwen3:8b, 34 preguntas)
+
+| | 1ª vuelta | 2ª | 3ª |
+|---|---|---|---|
+| Elección de herramienta | 93,9 % | 97,0 % | **97,0 %** |
+| **Respuesta final correcta** | 78,1 % | 87,5 % | **93,8 %** |
+| Comparativas | 4/6 | 6/6 | **6/6** |
+| Gastos | 7/9 | 8/9 | **9/9** |
+| Latencia mediana | 3,0 s | 3,2 s | **3,2 s** |
+
+De 78,1 % a 93,8 % **sin cambiar el modelo ni la latencia**, solo corrigiendo lo que la medición
+señaló. Esta tabla es el corazón de la sección de precisión de la memoria.
+
+**El fallo más grave lo encontró la medición, no la vista**: a *"¿he gastado más este año que el
+año pasado?"* generaba `strftime('%Y-%m')` en vez de `'%Y'`, comparaba **este mes contra el mes
+pasado** y lo presentaba como años. Respondía *"has gastado más este año"* cuando la verdad era
+17.870 € frente a 26.643 €: respuesta invertida, dicha con total seguridad. Arreglado con un
+few-shot de años. En una demo habría sonado perfectamente creíble.
+
+### 🔴 Hallazgo principal: el modelo no encadena herramientas
+
+En las 34 preguntas, el agente **solo encadena una segunda herramienta dentro del mismo turno en 2
+casos** (los dos gráficos). Nunca reconsulta tras ver un resultado. Consecuencia práctica:
+
+> **Ninguna regla del prompt del tipo "mira el resultado y reacciona" puede funcionar.**
+
+Explica a la vez el fallo de los gráficos y el de los resultados vacíos: son el mismo problema, y
+la solución tiene que ser arquitectónica (llamada dedicada de tarea única), no de prompt.
+Probado y revertido: reactivar el razonamiento tras un resultado vacío sube la latencia de 3,7 s a
+7,5 s y el modelo sigue sin reconsultar.
+
+Bug encontrado de paso: una consulta **agregada** sin resultados no devuelve cero filas, devuelve
+**una fila llena de NULL** (`SELECT SUM(x) FROM t WHERE false` → `[[None]]`), así que detectar
+"vacío" con `num_filas == 0` no detecta ninguna agregación.
+
+- [ ] **Fallos asumidos** (decisión consciente a favor de la latencia): *"¿cuánto cobro de
+      nómina?"* (se cobra el día 28; si hoy es 27 filtra por mes actual y dice que no hay nada),
+      preguntas sin periodo, y el saldo de otra persona.
 
 ---
 
@@ -252,36 +304,3 @@ y gráficos regulares por ahora.**
 - [ ] `retoCajaRural.zip` está commiteado dentro del propio repo.
 - [ ] Revisar la UI en móvil / ventana estrecha.
 
----
-
-# ✅ Hecho
-
-- [x] **Migración de Anthropic a proveedores OpenAI-compatibles**. Defaults `ollama` + `qwen3:8b`
-      en `agent.py`/`config.py`, `.env` local creado.
-- [x] **`llama3.1:8b` → `qwen3:8b`** (consulta simple 3,8 s; SQL → gráfico → conclusión ~22 s).
-      El interruptor `/no_think` **no** funciona con la plantilla de qwen3 en Ollama; lo que
-      funciona es `extra_body={"reasoning_effort": "none"}` por el endpoint OpenAI-compatible
-      (implementado como `EXTRA_BODY`). Hay además un filtro `limpiar_razonamiento()` que quita
-      restos de `<think>`.
-- [x] **Historial de las rutas gestionadas por backend**: `responder_directo` registra en
-      `self.historial` y `procesar` mete el mensaje de usuario antes de los atajos.
-- [x] **Capa de seguridad**: PIN por evento WebSocket aparte, nunca entra en el historial del LLM.
-- [x] **Tolerancia a modelos pequeños**: JSON corrupto → se devuelve el error al LLM para que se
-      autocorrija; spec Vega-Lite como string → se parsea; iteración vacía → reintento.
-- [x] Barra espaciadora para activar el micro + indicador de altavoz.
-- [x] `arrancar_ollama.sh` con `OLLAMA_CONTEXT_LENGTH=8192`, `KEEP_ALIVE=30m`, `FLASH_ATTENTION=1`.
-
----
-
-# Notas de contexto
-
-- Buena parte de los bugs vienen de que un modelo local de 8B genera tool calls menos fiables que
-  Claude: el código debe ser mucho más tolerante (parsear strings, reintentar, devolver errores al
-  modelo).
-- El stack que anuncia la cátedra es **Unicaja & Google Cloud** (+ NVIDIA). Ollama local es
-  defendible para un prototipo, pero conviene tener preparada en la memoria la respuesta de cómo
-  migraría a Vertex AI / Gemini, o por qué el modelo local es mejor decisión (coste, latencia,
-  soberanía del dato financiero).
-- El proyecto solapa con el **Reto 1** (voz realtime, LLM open source, casos de uso "Bizum por voz,
-  saldos y seguridad"). El baremo oficial puntúa Conversación + Agilidad + Operaciones = 40 pts,
-  así que esa parte cuenta y no hay que desmontarla.
