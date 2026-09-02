@@ -14,20 +14,25 @@ PUNTÚAN TRES COSAS, porque fallan por motivos distintos:
   2. RESPUESTA FINAL. Es lo único que oye el usuario. Se comprueba que los
      valores esperados aparezcan en el texto, con formato español.
 
-  3. GRÁFICO CUANDO TOCA. Son 20 pts del baremo (lógica visual + gráficos sin
-     plantillas), más que ninguna otra cosa salvo la precisión. Los casos con
-     `espera_grafico` se puntúan en los dos sentidos: no pintar donde hay
-     varios valores comparables es un fallo, y pintar donde la respuesta es un
-     único dato también, porque el criterio del propio system prompt lo
-     prohíbe. Se lee del evento `grafico` del WebSocket, así que mide lo que
-     de verdad le llega al frontend.
+  3. REFUERZO VISUAL CUANDO TOCA. Son 20 pts del baremo (lógica visual +
+     gráficos sin plantillas), más que ninguna otra cosa salvo la precisión.
+     Los casos con `espera_visual` se puntúan en los dos sentidos: no mostrar
+     nada donde hay varios valores comparables es un fallo, y mostrar algo
+     donde la respuesta es un único dato también, porque el criterio del
+     propio system prompt lo prohíbe.
+
+     Cuenta IGUAL una tabla que un gráfico: cuál de las dos es la mejor
+     representación lo decide el modelo, y las dos son respuestas válidas.
+     Forzar una de ellas convertiría en fallo una decisión de diseño
+     defendible. Se lee de los eventos `grafico` y `tabla` del WebSocket, así
+     que mide lo que de verdad le llega al frontend.
 
   4. SPEC PINTABLE. Que llegue un gráfico no significa que se vea: una spec
      sin `mark` pasa el filtro de `tools.py` (que solo exige `data.values`,
      a propósito, para admitir layer y concat) y revienta después en
      `vega-embed`, donde ya no lo registra nadie. Puntúa, y va aparte de la
      métrica 3 porque son fallos de cosas distintas: uno es el modelo
-     decidiendo si toca gráfico, el otro el modelo redactando la spec.
+     decidiendo si toca refuerzo, el otro el modelo redactando la spec.
 
 Y SE MIDE, SIN PUNTUAR, un indicador de DIAGNÓSTICO: se ejecutan la consulta
 del agente y una de referencia escrita a mano y se comparan los valores. Sirve
@@ -193,6 +198,8 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
     finales = [e for e in eventos if e["type"] == "fin_respuesta"]
     respuesta = finales[-1]["texto"] if finales else ""
     graficos = [e for e in eventos if e["type"] == "grafico"]
+    tablas = [e for e in eventos if e["type"] == "tabla"]
+    visuales = graficos + tablas
 
     resultado = {
         "id": caso["id"],
@@ -204,11 +211,12 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
         "sql_agente": sql_agente,
         "respuesta": respuesta,
         "graficos": len(graficos),
-        "razonamiento": graficos[-1].get("razonamiento", "") if graficos else "",
+        "tablas": len(tablas),
+        "razonamiento": visuales[-1].get("razonamiento", "") if visuales else "",
         "tool_ok": None,
         "valores_ok": None,
         "respuesta_ok": None,
-        "grafico_ok": None,
+        "visual_ok": None,
         "spec_ok": None,
     }
 
@@ -273,10 +281,10 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
     # Se puntúa en los dos sentidos: no pintar donde hay varios valores
     # comparables es un fallo, y pintar donde la respuesta es un único dato
     # también, porque el criterio del prompt dice explícitamente que no.
-    if "espera_grafico" in caso:
-        resultado["grafico_ok"] = bool(graficos) == caso["espera_grafico"]
+    if "espera_visual" in caso:
+        resultado["visual_ok"] = bool(visuales) == caso["espera_visual"]
 
-    # Una spec puede llegar y aun así no pintarse. Va separado de `grafico_ok`
+    # Una spec puede llegar y aun así no pintarse. Va separado de `visual_ok`
     # porque son fallos de cosas distintas: uno es del modelo decidiendo si
     # toca gráfico, el otro del modelo redactando la spec.
     if graficos:
@@ -304,7 +312,7 @@ def marca(valor) -> str:
 def es_fallo(r: dict) -> bool:
     """Un caso falla si suspende cualquiera de las métricas que puntúan."""
     return any(r[clave] is False
-               for clave in ("tool_ok", "respuesta_ok", "grafico_ok", "spec_ok"))
+               for clave in ("tool_ok", "respuesta_ok", "visual_ok", "spec_ok"))
 
 
 def informe(resultados: list[dict], modelo: str) -> bool:
@@ -318,7 +326,7 @@ def informe(resultados: list[dict], modelo: str) -> bool:
     for r in resultados:
         print(f"{r['id']:28} {r['tipo']:13} "
               f"{marca(r['tool_ok']):5} {marca(r['valores_ok']):4} {marca(r['respuesta_ok']):5} "
-              f"{marca(r['grafico_ok']):5} "
+              f"{marca(r['visual_ok']):5} "
               f"{r['latencia']:6.1f}  {r['pregunta'][:36]}")
 
     def tasa(clave):
@@ -333,7 +341,7 @@ def informe(resultados: list[dict], modelo: str) -> bool:
     print("PUNTUACIÓN")
     for clave, etiqueta in (("tool_ok", "Elección de herramienta"),
                             ("respuesta_ok", "Respuesta final correcta"),
-                            ("grafico_ok", "Gráfico cuando toca"),
+                            ("visual_ok", "Refuerzo visual cuando toca"),
                             ("spec_ok", "Specs que llegan a pintarse")):
         porcentaje, aciertos, total = tasa(clave)
         if porcentaje is not None:
@@ -372,12 +380,13 @@ def informe(resultados: list[dict], modelo: str) -> bool:
                 print(f"   esperado:     {r['esperados']}")
             if r.get("obtenidos") is not None:
                 print(f"   obtenido:     {r['obtenidos']}")
-            if r["grafico_ok"] is False:
-                if r["graficos"]:
-                    detalle = f"{r['graficos']} gráfico(s), no se esperaba ninguno"
+            if r["visual_ok"] is False:
+                if r["graficos"] or r["tablas"]:
+                    detalle = (f"{r['graficos']} gráfico(s) y {r['tablas']} tabla(s), "
+                               "no se esperaba ninguno")
                 else:
-                    detalle = "ninguno, se esperaba uno"
-                print(f"   gráfico:      {detalle}")
+                    detalle = "ninguno, se esperaba tabla o gráfico"
+                print(f"   visual:       {detalle}")
             if r["spec_ok"] is False:
                 print(f"   spec:         llega sin mark o sin encoding (no se pinta)")
                 for claves in r.get("claves_spec", []):

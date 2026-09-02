@@ -113,6 +113,30 @@
   }
   .tarjeta-grafico .porque b{color:var(--verde)}
 
+  /* Tablas: la otra mitad de la Generative UI. Misma tarjeta que el gráfico
+     para que se lean como dos formas de lo mismo, no como dos componentes. */
+  .tarjeta-grafico .tabla-scroll{width:100%; overflow-x:auto}
+  .tabla-datos{border-collapse:collapse; width:100%; font-size:13.5px}
+  .tabla-datos caption{
+    text-align:left; font-weight:700; color:var(--tinta);
+    padding-bottom:10px; font-size:14.5px;
+  }
+  .tabla-datos th,.tabla-datos td{
+    padding:7px 10px; text-align:left; border-bottom:1px solid var(--linea);
+    white-space:nowrap;
+  }
+  .tabla-datos th{
+    color:var(--tinta-suave); font-weight:600; font-size:12px;
+    text-transform:uppercase; letter-spacing:.4px;
+    border-bottom:1px solid var(--tinta-suave);
+  }
+  /* Los importes se leen comparando, así que van alineados a la derecha y en
+     cifras tabulares: si no, los millares bailan de fila en fila. */
+  .tabla-datos .num{text-align:right; font-variant-numeric:tabular-nums}
+  .tabla-datos .euros{text-align:right; font-variant-numeric:tabular-nums; font-weight:600}
+  .tabla-datos tbody tr:last-child td{border-bottom:none}
+  .tabla-datos tbody tr:hover{background:var(--verde-claro)}
+
   /* Sugerencias iniciales */
   .sugerencias{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:8px}
   .sugerencias button{
@@ -449,6 +473,60 @@ function manejarEvento(ev){
       break;
     }
 
+    case 'tabla': { // la IA ha decidido que estos datos se leen mejor en tabla
+      const tarjeta = document.createElement('div');
+      tarjeta.className = 'tarjeta-grafico';
+
+      const scroll = document.createElement('div');
+      scroll.className = 'tabla-scroll';
+      const tabla = document.createElement('table');
+      tabla.className = 'tabla-datos';
+
+      if (ev.title){
+        const cap = document.createElement('caption');
+        cap.textContent = ev.title;
+        tabla.appendChild(cap);
+      }
+
+      const thead = document.createElement('thead');
+      const filaCab = document.createElement('tr');
+      for (const col of ev.columnas){
+        const th = document.createElement('th');
+        th.textContent = col.titulo || col.campo;
+        if (col.formato === 'euros' || col.formato === 'numero') th.className = 'num';
+        filaCab.appendChild(th);
+      }
+      thead.appendChild(filaCab);
+      tabla.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      for (const fila of ev.filas){
+        const tr = document.createElement('tr');
+        for (const col of ev.columnas){
+          const td = document.createElement('td');
+          td.textContent = formatearCelda(fila[col.campo], col.formato);
+          if (col.formato === 'euros' || col.formato === 'numero') td.className = col.formato;
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      tabla.appendChild(tbody);
+      scroll.appendChild(tabla);
+      tarjeta.appendChild(scroll);
+
+      if (ev.razonamiento){
+        const p = document.createElement('div');
+        p.className = 'porque';
+        p.innerHTML = `<b>Por qué una tabla:</b> ${escapar(ev.razonamiento)}`;
+        tarjeta.appendChild(p);
+      }
+
+      bloqueActual?.appendChild(tarjeta);
+      if (turnoActivo) nuevaBurbuja();
+      bajar();
+      break;
+    }
+
     case 'saldo': {
       saldoEl.innerHTML = '<small>Saldo disponible</small>' +
         ev.valor.toLocaleString('es-ES', { style:'currency', currency:'EUR' });
@@ -476,6 +554,26 @@ function manejarEvento(ev){
 
 
   }
+}
+
+function formatearCelda(valor, formato){
+  // El backend manda los datos crudos; el formato español se aplica aquí, que
+  // es donde ya se formatea el saldo, en vez de pedírselo al modelo.
+  if (valor === null || valor === undefined || valor === '') return '—';
+  if (typeof valor === 'boolean') return valor ? 'Sí' : 'No';
+
+  if (formato === 'euros' && typeof valor === 'number')
+    return valor.toLocaleString('es-ES', { style:'currency', currency:'EUR' });
+
+  if (formato === 'numero' && typeof valor === 'number')
+    return valor.toLocaleString('es-ES');
+
+  if (formato === 'fecha'){
+    const d = new Date(valor);
+    if (!isNaN(d)) return d.toLocaleDateString('es-ES');
+  }
+
+  return String(valor);
 }
 
 function nuevaBurbuja(){

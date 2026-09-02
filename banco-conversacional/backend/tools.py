@@ -24,6 +24,7 @@ from .banking_api import (
     api_enviar_bizum,
     api_listar_contactos_bizum,
 )
+from .config import VISUALES_AL_LLM
 from .database import ejecutar_sql_seguro
 
 
@@ -139,6 +140,46 @@ TOOLS = [
         },
     },
     
+    # Tablas: la otra mitad de la Generative UI que pide el enunciado
+    # ("gráficos y tablas"). Poder elegir ENTRE tabla y gráfico es lo que
+    # convierte la lógica visual en una decisión de representación de verdad,
+    # en vez de elegir entre cuatro marcas de Vega-Lite.
+    {
+        "name": "mostrar_tabla",
+        "description": (
+            "Muestra una tabla al usuario. Úsala cuando lo que importa son las "
+            "cifras exactas, o cuando cada fila tiene varios atributos que se "
+            "leen mejor alineados que dibujados (por ejemplo, la lista de pagos "
+            "recurrentes con su cadencia y su coste mensual). Elige tú qué "
+            "columnas merecen aparecer y en qué orden."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Título de la tabla, en español."},
+                "columnas": {
+                    "type": "array",
+                    "description": (
+                        "Columnas a mostrar. Cada una con 'campo' (nombre exacto del dato), "
+                        "'titulo' (encabezado en español) y 'formato' "
+                        "('euros', 'numero', 'fecha' o 'texto')."
+                    ),
+                    "items": {"type": "object"},
+                },
+                "filas": {
+                    "type": "array",
+                    "description": "Las filas de datos, como objetos con las claves de 'campo'.",
+                    "items": {"type": "object"},
+                },
+                "razonamiento": {
+                    "type": "string",
+                    "description": "Una frase explicando por qué una tabla es lo mejor para estos datos.",
+                },
+            },
+            "required": ["columnas", "filas", "razonamiento"],
+        },
+    },
+
     {
         "name": "listar_contactos_bizum",
         "description": (
@@ -154,6 +195,16 @@ TOOLS = [
     },
     
 ]
+
+
+# Las herramientas visuales pueden ocultarse al LLM (VISUALES_AL_LLM=0). Siguen
+# existiendo en el dispatcher: es el motor visual quien las invoca, en su llamada
+# dedicada DESPUÉS de `fin_respuesta`. Cuando el modelo las llama él mismo lo hace
+# dentro del bucle, o sea antes de emitir la respuesta, y ahí bloquea la voz.
+TOOLS_VISUALES = ("mostrar_grafico", "mostrar_tabla")
+
+if not VISUALES_AL_LLM:
+    TOOLS = [t for t in TOOLS if t["name"] not in TOOLS_VISUALES]
 
 
 # Dispatcher central: decide qué función real ejecutar según el nombre de la tool.
@@ -246,6 +297,33 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
             "detalle": "Gráfico mostrado al usuario en pantalla."
         }, ensure_ascii=False)
         
+    if nombre == "mostrar_tabla":
+        columnas = entrada.get("columnas")
+        filas = entrada.get("filas")
+
+        if not isinstance(columnas, list) or not columnas:
+            return json.dumps({
+                "error": "La tabla necesita 'columnas': una lista con campo, titulo y formato."
+            }, ensure_ascii=False)
+
+        if not isinstance(filas, list) or not filas:
+            return json.dumps({
+                "error": "La tabla no incluye datos: añade 'filas' con los datos reales."
+            }, ensure_ascii=False)
+
+        await emitir({
+            "type": "tabla",
+            "title": entrada.get("title", ""),
+            "columnas": columnas,
+            "filas": filas,
+            "razonamiento": entrada.get("razonamiento", ""),
+        })
+
+        return json.dumps({
+            "estado": "ok",
+            "detalle": "Tabla mostrada al usuario en pantalla."
+        }, ensure_ascii=False)
+
     if nombre == "listar_contactos_bizum":
             resultado = api_listar_contactos_bizum()
             return json.dumps(resultado, ensure_ascii=False)    
