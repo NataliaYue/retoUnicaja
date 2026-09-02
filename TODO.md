@@ -36,6 +36,63 @@
 
 ---
 
+---
+
+# 🔵 Decisiones abiertas (para discutir más adelante)
+
+## ¿Debe el LLM decidir CUÁNDO mostrar un gráfico?
+
+Hoy **no lo decide**: está fijado. El reparto actual es este.
+
+| | quién decide |
+|---|---|
+| **Cuándo** mostrar algo | **fijo** — `es_graficable()` en `graficos.py`, una regla determinista |
+| **Qué**: tabla o gráfico | **el LLM** |
+| **Cómo**: marca, ejes, columnas, título, y el porqué | **el LLM** |
+
+La regla del "cuándo" es solo esto: ≥2 filas con alguna columna numérica → sí; 1 fila con ≥2
+cifras (una comparación) → sí; lo demás → no. Y `analizar_suscripciones` siempre, porque devuelve
+8 filas.
+
+**Matiz importante**: el LLM sí influye en el cuándo, de forma indirecta, porque es él quien
+escribe el SQL y el SQL determina la forma del resultado. Medido en `comp-gasolina-6-meses`: con
+`SELECT SUM(...)` sale 1 fila y no hay visual; con `GROUP BY mes` salen 6 y sí lo hay. La misma
+pregunta acababa o no en gráfico según cómo decidiera consultar. Por eso se arregló con una regla
+de SQL, no tocando el gate.
+
+### Por qué está así
+
+Cuando el LLM decidía el cuándo, lo hacía **de forma inestable**: 3 aciertos de 18, y la
+decisión se movía con cualquier edición del system prompt aunque no hablara de gráficos. El gate
+determinista acierta 15/15 sobre las preguntas etiquetadas.
+
+### El coste de cambiarlo, medido (3 vueltas, BD regenerada)
+
+| | LLM decide el cuándo | backend decide (actual) |
+|---|---|---|
+| Respuesta final correcta | 86,0 % | **90,3 %** |
+| Latencia hasta la voz (preguntas con visual) | **12,2 s** | **6,8 s** |
+| Refuerzo visual cuando toca | 23/24 | **24/24** |
+| Prompt | 2.912 tok | **2.396 tok** |
+
+Con la herramienta expuesta el modelo la llama a veces (15 de 35 visuales) y, cuando lo hace, es
+**en medio del turno**: el usuario espera el doble a oír la respuesta. Y aun así muestra menos.
+
+### Qué habría que discutir
+
+Los números dicen que el reparto actual es mejor. Lo que queda por decidir es **cómo se lee el
+proyecto**: si "la IA invoca la herramienta de gráficos dentro de su bucle agéntico" pesa en la
+valoración por encima de los 5,4 s de latencia y los 4 puntos de precisión.
+
+Argumento a favor de dejarlo como está: la IA **conserva todas las decisiones de diseño visual**
+—elige tabla o gráfico, la marca, los ejes y lo justifica—, y lo único que se le quita es una
+decisión mecánica que no sabía tomar. Eso se defiende bien en la memoria como decisión de
+arquitectura medida.
+
+- [ ] **Decidirlo antes de grabar el vídeo.** El cambio es una sola variable:
+      `VISUALES_AL_LLM = 1` en `config.py` (o `VISUALES_AL_LLM=1` como variable de entorno).
+      El interruptor está puesto justamente para poder rehacer la medición y comparar.
+
 # 🔴 Lo que más puntos deja sobre la mesa
 
 ### Conversación (15 pts) — sin medir
