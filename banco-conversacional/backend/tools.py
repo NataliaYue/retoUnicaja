@@ -18,7 +18,7 @@ Diseño clave para el baremo:
 
 import json   #diccionarios de python a strings JSON
 
-from .analitica import detectar_pagos_recurrentes
+from .analitica import detectar_pagos_recurrentes, proyectar_gasto_mes
 from .banking_api import (
     api_consultar_saldo,
     api_enviar_bizum,
@@ -140,6 +140,37 @@ TOOLS = [
         },
     },
     
+    # Analítica predictiva: el sistema es retrospectivo salvo por aquí.
+    # La proyección no es una regla de tres: los pagos fijos entran por su
+    # coste mensual conocido y el gasto variable se mezcla con la media
+    # histórica. Pedirle esto al LLM por SQL no funcionaría.
+    {
+        "name": "proyectar_gasto",
+        "description": (
+            "Proyecta cuánto va a gastar el cliente al final del mes en curso, en "
+            "total o en una categoría concreta, y lo compara con su media. Úsala "
+            "cuando pregunte cuánto va a gastar este mes, cuánto gastará en algo, "
+            "si va a gastar más o menos de lo normal, o si le pide una previsión. "
+            "Devuelve la proyección ya calculada junto a su margen de error real: "
+            "no la deduzcas tú ni la estimes con SQL, porque los pagos fijos del "
+            "principio de mes distorsionan cualquier regla de tres."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "categoria": {
+                    "type": "string",
+                    "description": (
+                        "Categoría a proyectar, si el usuario pregunta por una "
+                        "concreta. Debe ser un valor exacto de la columna "
+                        "`categoria`. Omítela para el gasto total del mes."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+
     # Tablas: la otra mitad de la Generative UI que pide el enunciado
     # ("gráficos y tablas"). Poder elegir ENTRE tabla y gráfico es lo que
     # convierte la lógica visual en una decisión de representación de verdad,
@@ -257,6 +288,10 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
 
     if nombre == "analizar_suscripciones":
         return json.dumps(detectar_pagos_recurrentes(), ensure_ascii=False)
+
+    if nombre == "proyectar_gasto":
+        categoria = (entrada.get("categoria") or "").strip() or None
+        return json.dumps(proyectar_gasto_mes(categoria), ensure_ascii=False)
 
     if nombre == "mostrar_grafico":
         spec = entrada.get("spec")

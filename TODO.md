@@ -140,14 +140,22 @@ Son los únicos puntos que dependen solo de ti, y no se improvisan el último d�
 # 🟠 Mejoras con retorno claro
 
 ### Agilidad (15 pts)
-- [ ] **Streaming percibido**: `agent.py` bufferiza todo el texto y lo emite al final de la
-      iteración (para no mostrar texto previo a las tools). Emitir deltas en cuanto llegue texto
-      y cortar/limpiar si aparece un tool call en el mismo turno.
+- [x] **Streaming percibido y TTS por frases** — eran el MISMO cambio: `agent.py` emitía un solo
+      evento `texto` al final, así que trocear el TTS sin arreglar eso no habría adelantado nada.
+      `frases_emitibles()` emite por frases completas, no por tokens: es la unidad que el TTS lee
+      sin cortar palabras y limita el parpadeo si hay que descartar.
+      Dos trampas, las dos cubiertas: el **punto de los millares** (sin cuidado, "1.234,56 €"
+      emite *"Has gastado 1."* como respuesta completa — se exige espacio detrás del punto) y los
+      bloques **`<think>` sin cerrar**, que si se emiten a medias dejan el razonamiento a la vista.
+      Si el modelo escribe texto y DESPUÉS llama a una tool, se emite `descartar_texto`: el
+      frontend limpia la burbuja y calla el TTS para no leer algo que se va a contradecir.
+      **Gana solo en respuestas largas**, y es honesto decirlo: el prompt pide brevedad, así que la
+      mayoría son una frase. *"¿A qué estoy suscrito?"* (5 frases) se empieza a oír **6,0 s antes**;
+      una respuesta de una frase no cambia. Banco completo sin mover una cifra.
 - [x] **Indicador durante las tools**: evento `tool_inicio` + spinner con estado en el frontend.
       Medido: no cuesta latencia (3,1 s hasta la voz, igual que antes).
       Ojo: **no se emite para el motor visual**, que va tras `fin_respuesta`. Es coherente —ahí el
       usuario ya está oyendo la respuesta— pero conviene saberlo si algún día se echa en falta.
-- [ ] **TTS por frases**: trocear por puntuación y hablar cada frase según llega.
 
 ### Operaciones (10 pts)
 - [x] Ampliar regex de `extraer_peticion_bizum`. Verificado que fallan hoy:
@@ -156,9 +164,36 @@ Son los únicos puntos que dependen solo de ti, y no se improvisan el último d�
 - [ ] Probar el flujo completo por voz: petición → sugerencia de contacto → PIN → saldo actualizado.
 
 ### Analítica predictiva
-- [ ] **Proyección de gasto a fin de mes** / alerta de desviación vs. media histórica.
-      "Analítica Predictiva" aparece literalmente en el enunciado y el sistema es 100 %
-      retrospectivo. Encaja directa sobre el motor visual que ya existe.
+- [x] **Proyección de gasto a fin de mes** (`proyectar_gasto`, en `analitica.py`). Total o por
+      categoría, solo del mes en curso.
+      **El estimador salió de un backtest sobre los 23 meses del histórico**, no de la intuición.
+      Error medio según el día del mes:
+
+      | | día 5 | día 10 | día 15 | día 20 |
+      |---|---|---|---|---|
+      | ingenua (regla de tres) | **174,5 %** | 73,3 % | 46,1 % | 25,9 % |
+      | pagos fijos aparte | 31,7 % | 18,4 % | 13,6 % | 10,6 % |
+      | **+ media histórica** | **8,7 %** | **7,6 %** | **8,4 %** | **7,7 %** |
+
+      Los pagos fijos NO se extrapolan (se sabe lo que cuestan) y el gasto variable se mezcla con
+      la media histórica, pesando el ritmo observado por lo avanzado que va el mes. Así el error
+      se queda estable en ~8 % todo el mes: **sirve desde el día 3, no solo desde el 25.**
+- [x] **La proyección lleva su propio margen de error**, porque el acierto depende muchísimo de la
+      categoría: 0 % en alquiler o gimnasio (son fijos), 17-22 % en supermercado o gasolina,
+      34-47 % en ocio o ropa, **105 % en bizums enviados**. Dar una cifra seca para todas habría
+      sido creíble y falso. El margen no se inventa: se calcula proyectando cada mes pasado con el
+      mismo estimador y midiendo cuánto falló.
+
+### ⚠️ Fallo conocido: no avisa de que solo proyecta el mes en curso
+A *"¿cuánto gastaré en gasolina el mes que viene?"* responde con la cifra de ESTE mes. No miente
+—dice "este mes"— pero ignora la pregunta. **Dos arreglos probados y medidos, los dos fallidos:**
+una regla en el system prompt (0/3) y un campo `alcance` en el propio payload de la herramienta
+(0/3). El 8B no detecta el desajuste temporal entre la pregunta y el alcance de la tool.
+
+- [ ] Si se quiere cerrar, la vía que queda es determinista: detectar en el backend "el mes que
+      viene / próximo mes" como se hace con `es_consulta_saldo`. Ojo con los falsos positivos:
+      *"¿cuánto me cobrarán de Netflix el mes que viene?"* SÍ tiene respuesta, porque es un pago
+      fijo, y una negativa en bloque sería un error.
 
 ---
 
