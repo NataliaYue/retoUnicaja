@@ -186,6 +186,7 @@ TOOLS = [
             "Devuelve la lista exacta de contactos con los que el cliente ha operado "
             "por Bizum. Úsala SIEMPRE Y DIRECTAMENTE si el usuario pregunta cuáles "
             "son sus contactos, a quién puede enviar dinero, o si pide ver su agenda."
+            
         ),
         "input_schema": {
             "type": "object", 
@@ -325,8 +326,27 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
         }, ensure_ascii=False)
 
     if nombre == "listar_contactos_bizum":
-            resultado = api_listar_contactos_bizum()
-            return json.dumps(resultado, ensure_ascii=False)    
+        datos_api = api_listar_contactos_bizum()
+        contactos = datos_api.get("contactos", [])
+
+        # Estructuramos los datos en el formato de tabla que soporta index.html
+        columnas = [{"campo": "nombre", "titulo": "Contacto / Destinatario", "formato": "texto"}]
+        filas = [{"nombre": c} for c in contactos]
+
+        payload_tabla = {
+            "title": "Tus contactos de Bizum",
+            "columnas": columnas,
+            "filas": filas,
+            "razonamiento": "Mostramos la agenda de contactos en formato tabular para consultar los nombres e identificar visualmente a cada destinatario."
+        }
+
+        # Emitimos el evento 'tabla' por WebSocket igual que con las demás herramientas visuales
+        await emitir({
+            "type": "tabla",
+            **payload_tabla
+        })
+
+        return json.dumps(payload_tabla, ensure_ascii=False)
 
     return json.dumps({"error": f"Herramienta desconocida: {nombre}"})
 

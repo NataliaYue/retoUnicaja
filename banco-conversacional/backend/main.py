@@ -66,11 +66,13 @@ app = FastAPI(
 def index():
     return FileResponse(FRONTEND)
 
+@app.get("/unicaja.png")
+def logo():
+    return FileResponse(FRONTEND.parent / "unicaja.png")
 
 @app.get("/api/saldo")
 def saldo():
     return api_consultar_saldo()
-
 
 @app.websocket("/ws")
 async def websocket_chat(ws: WebSocket):
