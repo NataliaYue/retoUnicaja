@@ -16,6 +16,7 @@ Diseño clave para el baremo:
   (lógica visual, 10 pts). El agente la reenvía al frontend por WebSocket.
 """
 
+import asyncio
 import json   #diccionarios de python a strings JSON
 
 from .analitica import detectar_pagos_recurrentes, proyectar_gasto_mes
@@ -251,9 +252,24 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
 
     Devuelve el resultado serializado (str) que se inserta como tool_result
     en la conversación con el LLM.
+
+    TODO acceso a la base de datos sale del event loop con `asyncio.to_thread`.
+    sqlite3 es SÍNCRONO: llamarlo aquí directamente congela el bucle de asyncio
+    entero, o sea TODAS las conexiones WebSocket a la vez, no solo la que hizo
+    la consulta. Una llamada suelta es barata (0,1 ms el saldo, 6 ms la
+    proyección), y por eso con un único usuario no se nota nada; el problema es
+    que van encadenadas y sin puntos de cesión. Medido con 5 usuarios haciendo
+    6 turnos: el loop se quedaba atascado 168 ms seguidos y solo llegaban a
+    dispararse 3 latidos de 5 ms en toda la prueba.
+
+    Las funciones de abajo siguen siendo síncronas a propósito: así los tests
+    y la ruta REST `/api/saldo` las usan tal cual, y la preocupación asíncrona
+    se queda en la capa asíncrona. Cada una abre y cierra su propia conexión
+    dentro de la misma llamada, así que ejecutarlas en un hilo del pool es
+    seguro pese al `check_same_thread` de sqlite3.
     """
     if nombre == "consultar_saldo":
-        resultado = api_consultar_saldo()
+        resultado = await asyncio.to_thread(api_consultar_saldo)
         await emitir({"type": "saldo", "valor": resultado["saldo"]})
         return json.dumps(resultado, ensure_ascii=False)
 
@@ -264,7 +280,12 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
                 "motivo": "Bizum bloqueado: falta confirmación explícita."
             }, ensure_ascii=False)
 
-        resultado = api_enviar_bizum(
+        # Esta es la que más importa que salga del loop: `api_enviar_bizum`
+        # abre una transacción IMMEDIATE y, si hay otro envío en curso, espera
+        # en el `busy_timeout` hasta 5 s. Esa espera tiene que bloquear un hilo
+        # del pool, nunca el event loop.
+        resultado = await asyncio.to_thread(
+            api_enviar_bizum,
             destinatario=entrada.get("destinatario", ""),
             cantidad=entrada.get("cantidad", 0),
             concepto=entrada.get("concepto", ""),
@@ -276,7 +297,7 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
         return json.dumps(resultado, ensure_ascii=False)
 
     if nombre == "consultar_movimientos":
-        resultado = ejecutar_sql_seguro(entrada.get("sql", ""))
+        resultado = await asyncio.to_thread(ejecutar_sql_seguro, entrada.get("sql", ""))
 
         # El SQL se muestra en la interfaz (transparencia + material para la memoria)
         await emitir({
@@ -288,11 +309,13 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
         return json.dumps(resultado, ensure_ascii=False)
 
     if nombre == "analizar_suscripciones":
-        return json.dumps(detectar_pagos_recurrentes(), ensure_ascii=False)
+        recurrentes = await asyncio.to_thread(detectar_pagos_recurrentes)
+        return json.dumps(recurrentes, ensure_ascii=False)
 
     if nombre == "proyectar_gasto":
         categoria = (entrada.get("categoria") or "").strip() or None
-        return json.dumps(proyectar_gasto_mes(categoria), ensure_ascii=False)
+        proyeccion = await asyncio.to_thread(proyectar_gasto_mes, categoria)
+        return json.dumps(proyeccion, ensure_ascii=False)
 
     if nombre == "mostrar_grafico":
         spec = entrada.get("spec")
@@ -361,7 +384,7 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
         }, ensure_ascii=False)
 
     if nombre == "listar_contactos_bizum":
-        datos_api = api_listar_contactos_bizum()
+        datos_api = await asyncio.to_thread(api_listar_contactos_bizum)
         contactos = datos_api.get("contactos", [])
 
         # Estructuramos los datos en el formato de tabla que soporta index.html

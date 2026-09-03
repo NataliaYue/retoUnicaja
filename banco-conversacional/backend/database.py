@@ -20,7 +20,7 @@ import re
 import sqlite3
 
 from .config import DB_PATH
-from contextlib import closing
+from contextlib import closing, contextmanager
 # Tope de filas devueltas al LLM. Ojo: no es solo una cuestión de latencia.
 # El resultado entra entero en el historial de la conversación, y con un
 # contexto de 8192 tokens (ver arrancar_ollama.sh) del que el system prompt y
@@ -46,10 +46,59 @@ def conexion_lectura() -> sqlite3.Connection:
 
 
 def conexion_escritura() -> sqlite3.Connection:
-    """Conexión normal, reservada a las APIs bancarias ficticias (no al LLM)."""
-    conn = sqlite3.connect(DB_PATH)
+    """
+    Conexión normal, reservada a las APIs bancarias ficticias (no al LLM).
+
+    `isolation_level=None` apaga las transacciones implícitas del driver. No es
+    un detalle: por defecto, sqlite3 abre la transacción ante el primer
+    INSERT/UPDATE, o sea DESPUÉS de las lecturas, así que un
+    leer-comprobar-escribir queda partido en dos. Comprobado sobre esta misma
+    versión de Python: tras un SELECT, `conn.in_transaction` es False.
+
+    Apagándolas, quien decide dónde empieza la transacción es
+    `transaccion_escritura`, que es donde tiene que decidirse.
+
+    `busy_timeout` es el complemento: si otro escritor tiene el bloqueo, este
+    espera hasta 5 s en vez de fallar en el acto con "database is locked".
+    """
+    conn = sqlite3.connect(DB_PATH, isolation_level=None)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
+
+
+@contextmanager
+def transaccion_escritura():
+    """
+    Conexión de escritura con el bloqueo ya tomado ANTES de la primera lectura.
+
+    Es lo que hace atómico un leer-comprobar-escribir, y `api_enviar_bizum` es
+    exactamente eso: lee el saldo, comprueba que llega, y solo entonces lo
+    actualiza. Sin esta transacción, dos envíos simultáneos leen el MISMO
+    saldo, los dos pasan la comprobación y el segundo UPDATE pisa al primero:
+    salen dos Bizums de 100 € y el saldo baja 100. Medido con dos hilos sobre
+    una copia de la BD, se pierde dinero en 4 de cada 5 intentos.
+
+    La palabra que importa es IMMEDIATE, no BEGIN. Un `BEGIN` a secas es
+    diferido: toma el bloqueo de escritura en el primer UPDATE, o sea otra vez
+    después de las lecturas, y la carrera sigue igual. Con IMMEDIATE el
+    bloqueo se toma en el acto y el segundo envío espera en el BEGIN.
+
+    Una salida temprana del bloque (importe rechazado, saldo insuficiente)
+    hace COMMIT de una transacción sin escrituras: es un no-op que suelta el
+    bloqueo, que es justo lo que se quiere. Si algo lanza, se hace ROLLBACK y
+    la operación no deja rastro a medias.
+    """
+    conn = conexion_escritura()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        yield conn
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def ejecutar_sql_seguro(sql: str) -> dict:

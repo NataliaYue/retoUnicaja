@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import json
@@ -737,7 +738,10 @@ class Agente:
             await decir(error_importe)
             return
 
-        validacion = buscar_contacto_bizum(destinatario_original)
+        # Consulta la agenda en la BD: fuera del event loop, como el resto de
+        # accesos a datos (ver la nota de `ejecutar_tool`). `buscar_contacto_bizum`
+        # se queda síncrona para que `tests/test_bizum.py` la siga llamando tal cual.
+        validacion = await asyncio.to_thread(buscar_contacto_bizum, destinatario_original)
 
         if validacion["estado"] == "no_encontrado":
             anotar({"estado": "no_encontrado", "destinatario": destinatario_original})
@@ -997,6 +1001,13 @@ class Agente:
 
                 # Si hay herramientas, NO mostramos texto_iteracion.
                 # Responderán las tools o el backend controlado.
+                #
+                # El mensaje `assistant` de arriba ya declara TODOS los tool
+                # calls de esta tanda, así que a partir de aquí cada uno debe
+                # dejar su `tool_result` sí o sí. Se lleva la cuenta para poder
+                # cerrar los que queden si el turno se corta por el camino.
+                respondidos: set[str] = set()
+
                 for tc in tool_calls_locales.values():
                     try:
                         args = json.loads(tc["arguments"]) if tc["arguments"] else {}
@@ -1012,6 +1023,7 @@ class Agente:
                                 "error": f"Los argumentos no son JSON válido: {e}. Reintenta la llamada."
                             }, ensure_ascii=False),
                         })
+                        respondidos.add(tc["id"])
                         continue
 
                     if tc["name"] == "enviar_bizum":
@@ -1026,6 +1038,7 @@ class Agente:
                                 "name": _tc["name"],
                                 "content": json.dumps(payload, ensure_ascii=False),
                             })
+                            respondidos.add(_tc["id"])
 
                         await self.iniciar_bizum(
                             args.get("destinatario", ""),
@@ -1034,6 +1047,29 @@ class Agente:
                             registrar=registrar,
                             emitir_inicio=False,   # `inicio_respuesta` ya se emitió
                         )
+
+                        # El Bizum se queda el turno: ya ha respondido y puede
+                        # haber pedido el PIN, así que no se sigue iterando ni
+                        # se ejecuta nada más. Pero salir sin cerrar el resto de
+                        # tool calls de esta MISMA tanda deja el historial roto:
+                        # un `assistant` con N tool_calls y menos de N respuestas
+                        # hace que la API rechace la petición SIGUIENTE con un
+                        # 400, así que el usuario perdería el turno de después
+                        # —justo cuando viene a teclear el PIN—.
+                        for pendiente in tool_calls_locales.values():
+                            if pendiente["id"] in respondidos:
+                                continue
+                            self.historial.append({
+                                "role": "tool",
+                                "tool_call_id": pendiente["id"],
+                                "name": pendiente["name"],
+                                "content": json.dumps({
+                                    "estado": "no_ejecutada",
+                                    "motivo": "Hay un envío de Bizum en curso pendiente "
+                                              "del PIN. Esta herramienta no se ha ejecutado; "
+                                              "vuelve a pedirla si sigue haciendo falta.",
+                                }, ensure_ascii=False),
+                            })
                         return
 
                     # Avisamos al frontend antes de ejecutar la tool, para que
@@ -1069,6 +1105,7 @@ class Agente:
                         "name": tc["name"],
                         "content": salida,
                     })
+                    respondidos.add(tc["id"])
 
         except Exception as e:
             await self.emitir({"type": "error", "detalle": explicar_error(e)})

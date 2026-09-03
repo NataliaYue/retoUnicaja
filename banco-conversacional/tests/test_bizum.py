@@ -20,7 +20,9 @@ Uso:  python -m tests.test_bizum
 
 import asyncio
 import shutil
+import sqlite3
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -31,8 +33,9 @@ from backend.agent import (  # noqa: E402
     extraer_peticion_bizum,
     validar_importe_bizum,
 )
-from backend.banking_api import api_consultar_saldo  # noqa: E402
+from backend.banking_api import api_consultar_saldo, api_enviar_bizum  # noqa: E402
 from backend.config import BIZUM_LIMITE_DIARIO, BIZUM_MAX, BIZUM_MIN, DB_PATH, PIN_BIZUM  # noqa: E402
+from backend.database import transaccion_escritura  # noqa: E402
 
 
 class Grabadora:
@@ -252,6 +255,81 @@ async def test_flujo() -> list[bool]:
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# 5. Atomicidad: dos envíos a la vez no pueden gastar el mismo saldo
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_concurrencia() -> list[bool]:
+    """
+    `api_enviar_bizum` es un leer-comprobar-escribir: lee el saldo, comprueba
+    que llega, y solo entonces lo actualiza. Si esa secuencia no es atómica,
+    dos envíos simultáneos leen el MISMO saldo, los dos pasan la comprobación
+    y el segundo UPDATE pisa al primero: salen 1.200 € de una cuenta con 1.000
+    y el saldo solo baja 600.
+
+    Aquí se comprueba la PROPIEDAD que lo impide, no el síntoma. Una carrera
+    solo se manifiesta cuando los hilos coinciden en una ventana de
+    milisegundos: un test que dependa de eso pasaría casi siempre aunque el
+    arreglo se hubiera quitado, y como red de seguridad no valdría nada.
+    """
+    print("\n5. Atomicidad de los envíos simultáneos")
+    r = []
+
+    # La propiedad: `transaccion_escritura` toma el bloqueo de escritura ANTES
+    # de la primera lectura. Si alguien cambiara el BEGIN IMMEDIATE por un
+    # BEGIN a secas, el bloqueo se tomaría en el primer UPDATE —o sea, después
+    # de las lecturas— y esta comprobación fallaría en el acto.
+    bloqueado = []
+
+    def intenta_escribir():
+        otra = sqlite3.connect(DB_PATH, isolation_level=None, timeout=0.5)
+        try:
+            otra.execute("BEGIN IMMEDIATE")
+            bloqueado.append(False)     # pudo entrar: NO había bloqueo
+            otra.rollback()
+        except sqlite3.OperationalError:
+            bloqueado.append(True)      # esperado: el bloqueo ya estaba tomado
+        finally:
+            otra.close()
+
+    with transaccion_escritura() as conn:
+        conn.execute("SELECT saldo FROM cliente WHERE id = 1").fetchone()
+        hilo = threading.Thread(target=intenta_escribir)
+        hilo.start()
+        hilo.join()
+
+    r.append(comprueba(bloqueado == [True],
+                       "el bloqueo se toma antes de la primera lectura (BEGIN IMMEDIATE)",
+                       "otro escritor pudo entrar: el leer-comprobar-escribir no es atómico"))
+
+    # Y el comportamiento, con dos envíos de verdad a la vez. El límite diario
+    # del asistente son 500 €, así que de dos envíos de 300 € solo puede pasar
+    # uno, y el saldo tiene que bajar exactamente 300.
+    with transaccion_escritura() as conn:
+        conn.execute("UPDATE cliente SET saldo = 1000 WHERE id = 1")
+        conn.execute("DELETE FROM movimientos "
+                     "WHERE categoria = 'bizum_enviado' AND fecha = date('now')")
+
+    salidas: list[dict] = []
+    hilos = [threading.Thread(target=lambda: salidas.append(
+        api_enviar_bizum("María López", 300.0))) for _ in range(2)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+
+    aceptados = sum(1 for s in salidas if s.get("estado") == "ok")
+    saldo = api_consultar_saldo()["saldo"]
+
+    r.append(comprueba(aceptados == 1,
+                       f"dos envíos de 300 € con límite de {BIZUM_LIMITE_DIARIO:.0f} €: solo pasa uno",
+                       f"pasaron {aceptados}: {[s.get('estado') for s in salidas]}"))
+    r.append(comprueba(round(saldo, 2) == 700.0,
+                       "el saldo baja exactamente lo enviado, sin pisarse",
+                       f"quedó en {saldo} € en vez de 700,00 €"))
+    return r
+
+
+# ──────────────────────────────────────────────────────────────────────────
 
 def main() -> int:
     copia = DB_PATH.with_suffix(".db.bak_test")
@@ -262,6 +340,7 @@ def main() -> int:
     try:
         r = test_extraccion() + test_limites_importe() + test_contactos()
         r += asyncio.run(test_flujo())
+        r += test_concurrencia()
     finally:
         shutil.copy2(copia, DB_PATH)
         copia.unlink()

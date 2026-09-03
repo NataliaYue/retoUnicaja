@@ -557,6 +557,11 @@ function manejarEvento(ev){
           const corte = match.index + 1;
           const frase = bufferVoz.substring(0, corte);
           bufferVoz = bufferVoz.substring(corte).trimStart();
+          // Marcamos que ya ha sonado algo de este turno: es lo que le permite
+          // a `descartar_texto` saber que hay voz que callar. Sin esta línea la
+          // bandera nunca llegaba a true y el cancel() de ahí abajo era código
+          // muerto: la burbuja se limpiaba y el TTS seguía leyendo igual.
+          habladoEnStreaming = true;
           hablar(frase); // Habla esta frase mientras el LLM sigue generando la siguiente
         }
 
@@ -569,6 +574,10 @@ function manejarEvento(ev){
       // mostró no era la respuesta, responderán las tools. Se retira y se
       // calla el TTS para no leer algo que se va a contradecir.
       if (burbujaActual) burbujaActual.textContent = '';
+      // El trozo que aún no había cerrado frase también se descarta. Si se
+      // queda en el buffer, `fin_respuesta` lo lee pegado a la respuesta buena
+      // y sin espacio delante: "Déjame verHas gastado 124,14 €".
+      bufferVoz = '';
       if (habladoEnStreaming) {
         speechSynthesis.cancel();
         habladoEnStreaming = false;

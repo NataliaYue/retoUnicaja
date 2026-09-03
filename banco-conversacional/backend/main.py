@@ -83,8 +83,10 @@ async def websocket_chat(ws: WebSocket):
 
     agente = Agente(emitir)
 
-    # Saludo inicial + saldo para la cabecera
-    datos = api_consultar_saldo()
+    # Saludo inicial + saldo para la cabecera. Va en un hilo como el resto de
+    # accesos a la BD: aquí se ejecuta en CADA conexión nueva, así que una
+    # reconexión masiva sería justo el momento de no bloquear el loop.
+    datos = await asyncio.to_thread(api_consultar_saldo)
     await emitir({"type": "saldo", "valor": datos["saldo"]})
 
     try:

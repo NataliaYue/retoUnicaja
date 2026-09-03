@@ -13,7 +13,7 @@ y siempre con parámetros ligados (?), nunca con SQL construido por el LLM.
 from datetime import date
 
 from .config import BIZUM_LIMITE_DIARIO, BIZUM_MAX, BIZUM_MIN
-from .database import conexion_escritura, conexion_lectura
+from .database import conexion_lectura, transaccion_escritura
 from contextlib import closing
 
 def api_consultar_saldo() -> dict:
@@ -57,7 +57,11 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
             "motivo": "El importe de un Bizum debe estar entre 0,50 € y 1.000 €.",
         }
 
-    with closing(conexion_escritura()) as conn:
+    # Todo el leer-comprobar-escribir va dentro de UNA transacción IMMEDIATE:
+    # el límite diario y el saldo se comprueban contra el mismo estado sobre el
+    # que después se escribe. Sin eso, dos envíos a la vez leen el mismo saldo,
+    # los dos lo aprueban y el segundo UPDATE pisa al primero.
+    with transaccion_escritura() as conn:
         # 1. Comprobar el límite diario acumulado
         hoy = date.today().isoformat()
         
@@ -100,7 +104,7 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
                 + (f" - {concepto.strip()}" if concepto and concepto.strip() else ""),
             ),
         )
-        conn.commit()
+        # El COMMIT lo hace `transaccion_escritura` al salir del bloque.
 
     return {
         "estado": "ok",

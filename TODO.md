@@ -197,6 +197,33 @@ una regla en el system prompt (0/3) y un campo `alcance` en el propio payload de
 
 ---
 
+### ⚠️ El prompt vuelve a crecer, y ya se nota
+
+`comp-super-vs-restaurantes` se degrada de forma sostenida a lo largo del día, y el prompt crece
+en paralelo:
+
+| vuelta | ese caso | prompt |
+|---|---|---|
+| tras el refactor de Bizum | 3/3 | 2.201 tok |
+| tras el streaming | 3/3 | 2.201 tok |
+| tras la proyección | 3/3 → 2/3 | 2.537 tok |
+| tras el merge | **0/3** | 2.631 tok |
+
+El ejemplo que arregla ese caso (*"el `CASE` va sobre `categoria`, no sobre la fecha"*) **sigue
+intacto**: está verificado. Lo que pasa es lo ya medido esta mañana — cada regla nueva le roba
+peso a las demás. Se han añadido el bloque de `proyectar_gasto`, la regla de la segunda persona
+y la de las tablas: ~430 tokens con los que ese ejemplo ahora compite.
+
+Importa porque el fallo es **una respuesta invertida dicha con seguridad**: *"el gasto en
+supermercado y en restaurantes es el mismo: 6.043,91 €"*, cuando son 4.622 y 1.421.
+
+- [ ] Recortar el prompt otra vez, **después del vídeo**. Ahora está en 2.891 tokens (con el
+      esquema de tools) frente a los 2.396 de cuando se midió que iba bien. El precedente existe:
+      adelgazarlo en la Fase 5 no costó precisión. Tocarlo antes de grabar reabre algo que está
+      estable en todo lo demás.
+
+---
+
 # 🟡 Deuda técnica
 
 - [x] **El flujo Bizum estaba escrito dos veces** y las copias ya habían divergido: la del backend
