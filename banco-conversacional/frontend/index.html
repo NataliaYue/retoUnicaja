@@ -83,6 +83,36 @@
   .msg.asistente:empty::after{content:'●'; color:var(--verde); animation:parpadeo 1s infinite}
   @keyframes parpadeo{50%{opacity:.2}}
 
+/* Indicador de carga para las tools */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--linea);
+    border-top-color: var(--verde);
+    border-radius: 50%;
+    animation: giro .8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes giro { to { transform: rotate(360deg); } }
+  
+  .msg.asistente.cargando {
+    color: var(--tinta-suave);
+    background: transparent;
+    box-shadow: none;
+    font-size: 13.5px;
+    display: flex;
+    align-items: center;
+  }
+
+
+
+
+
+
+
+
+
   .bloque-asistente{align-self:flex-start; max-width:92%; display:flex; flex-direction:column; gap:10px}
 
   /* Chip de SQL (transparencia del text-to-SQL) */
@@ -425,7 +455,29 @@ function manejarEvento(ev){
       break;
 
     case 'texto': // streaming token a token
-      if (burbujaActual) burbujaActual.textContent += ev.delta;
+      if (burbujaActual) {
+        // Si la burbuja era la de carga, la convertimos en una normal
+        if (burbujaActual.classList.contains('cargando')) {
+          burbujaActual.className = 'msg asistente';
+          burbujaActual.innerHTML = '';
+        }
+        burbujaActual.textContent += ev.delta;
+      }
+      bajar();
+      break;
+    case 'tool_inicio':
+      if (burbujaActual && !burbujaActual.textContent.trim()) {
+        burbujaActual.remove(); // Quitamos la burbuja vacía parpadeante
+      }
+      burbujaActual = document.createElement('div');
+      burbujaActual.className = 'msg asistente cargando';
+      
+      let texto = 'Procesando...';
+      if (ev.nombre === 'consultar_movimientos') texto = 'Consultando histórico...';
+      if (ev.nombre === 'analizar_suscripciones') texto = 'Analizando pagos recurrentes...';
+      
+      burbujaActual.innerHTML = `<span class="spinner"></span>${texto}`;
+      bloqueActual?.appendChild(burbujaActual);
       bajar();
       break;
 
@@ -577,8 +629,11 @@ function formatearCelda(valor, formato){
 }
 
 function nuevaBurbuja(){
-  // Tras un SQL o un gráfico, el texto siguiente va en una burbuja nueva
-  if (burbujaActual && !burbujaActual.textContent) { burbujaActual.remove(); }
+  // Tras un SQL o un gráfico, el texto siguiente va en una burbuja nueva.
+  // Si estaba la burbuja de carga o una vacía, la eliminamos.
+  if (burbujaActual && (!burbujaActual.textContent.trim() || burbujaActual.classList.contains('cargando'))) { 
+    burbujaActual.remove(); 
+  }
   burbujaActual = document.createElement('div');
   burbujaActual.className = 'msg asistente';
   bloqueActual?.appendChild(burbujaActual);

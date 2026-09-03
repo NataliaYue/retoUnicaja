@@ -14,11 +14,11 @@ from datetime import date
 
 from .config import BIZUM_LIMITE_DIARIO, BIZUM_MAX, BIZUM_MIN
 from .database import conexion_escritura, conexion_lectura
-
+from contextlib import closing
 
 def api_consultar_saldo() -> dict:
     """GET /api/v1/cuentas/saldo (ficticio)."""
-    with conexion_lectura() as conn:
+    with closing(conexion_lectura()) as conn:
         fila = conn.execute("SELECT nombre, iban, saldo FROM cliente WHERE id = 1").fetchone()
     return {
         "estado": "ok",
@@ -30,13 +30,8 @@ def api_consultar_saldo() -> dict:
 
 
 def api_listar_contactos_bizum() -> dict:
-    """
-    GET /api/v1/bizum/contactos (ficticio).
-
-    Devuelve los contactos conocidos de Bizum a partir del histórico
-    de movimientos. Sirve para validar destinatarios antes de enviar dinero.
-    """
-    with conexion_lectura() as conn:
+    """GET /api/v1/bizum/contactos (ficticio)."""
+    with closing(conexion_lectura()) as conn:
         filas = conn.execute("""
             SELECT DISTINCT comercio
             FROM movimientos
@@ -51,9 +46,7 @@ def api_listar_contactos_bizum() -> dict:
 
 
 def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> dict:
-    """
-    POST /api/v1/bizum/enviar (ficticio).
-    """
+    """POST /api/v1/bizum/enviar (ficticio)."""
     if not destinatario or not destinatario.strip():
         return {"estado": "error", "motivo": "Falta el destinatario."}
 
@@ -64,7 +57,7 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
             "motivo": "El importe de un Bizum debe estar entre 0,50 € y 1.000 €.",
         }
 
-    with conexion_escritura() as conn:
+    with closing(conexion_escritura()) as conn:
         # 1. Comprobar el límite diario acumulado
         hoy = date.today().isoformat()
         

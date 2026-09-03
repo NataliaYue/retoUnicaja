@@ -238,6 +238,17 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
             r"(?P<destinatario>.+?)$"
         ),
         
+        (
+            r"(?:un\s+)?bizum\s+(?:de\s+)?(?P<cantidad>\d+"
+            r"(?:[,.]\d+)?)\s*(?:€|euros?)?\s+para\s+"
+            r"(?P<destinatario>.+)"
+        ),
+        
+        (   
+            r"(?:p[aá]gale|pagar)\s+(?P<cantidad>\d+"
+            r"(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
+            r"(?P<destinatario>.+?)\s+(?:por\s+)?bizum"
+        ),
     ]
 
     for patron in patrones:
@@ -883,6 +894,8 @@ class Agente:
                             
                             await self.responder_directo(texto, emitir_inicio=False)
                             return
+                        
+            
 
                         # Mismo control que en la vía del backend: el importe
                         # se rechaza aquí, no después de haber pedido el PIN.
@@ -997,6 +1010,13 @@ class Agente:
                         await self.emitir({"type": "pedir_pin"})
                         
                         return
+                    
+                    # AÑADE ESTO: Avisamos al frontend antes de ejecutar la tool
+                    await self.emitir({
+                        "type": "tool_inicio",
+                        "nombre": tc["name"]
+                    })
+                    
 
                     salida = str(await ejecutar_tool(tc["name"], args, self.emitir))
 

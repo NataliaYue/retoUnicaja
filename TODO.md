@@ -130,7 +130,7 @@ Son los únicos puntos que dependen solo de ti, y no se improvisan el último d�
 - [ ] **TTS por frases**: trocear por puntuación y hablar cada frase según llega.
 
 ### Operaciones (10 pts)
-- [ ] Ampliar regex de `extraer_peticion_bizum`. Verificado que fallan hoy:
+- [x] Ampliar regex de `extraer_peticion_bizum`. Verificado que fallan hoy:
       "bizum de 20 euros para María", "págale 15 euros a Ana por bizum".
       Cuando falla no es fatal —cae al LLM, que tiene la tool— pero es más lento y menos fiable.
 - [ ] Probar el flujo completo por voz: petición → sugerencia de contacto → PIN → saldo actualizado.
@@ -147,10 +147,10 @@ Son los únicos puntos que dependen solo de ti, y no se improvisan el último d�
 - [ ] **El flujo Bizum sigue escrito dos veces**: `preparar_bizum_desde_backend()` y la rama del
       tool call en `_procesar()`. La validación del importe tapó la divergencia, pero no la causa,
       y `agent.py` va por ~1.000 líneas. Extraer un `iniciar_bizum()` común, o un `bizum.py`.
-- [ ] **Fuga de conexiones SQLite**: `with conexion_lectura() as conn:` **no cierra** la conexión
+- [x] **Fuga de conexiones SQLite**: `with conexion_lectura() as conn:` **no cierra** la conexión
       — el context manager de sqlite3 solo hace commit/rollback. Afecta a `database.py` y a todo
       `banking_api.py`. Cada consulta deja un descriptor abierto.
-- [ ] `requirements.txt`: `anthropic` y `ollama` no se importan en ningún sitio, quitar.
+- [x] `requirements.txt`: `anthropic` y `ollama` no se importan en ningún sitio, quitar.
       Ojo: `openai` SÍ es necesario aunque el proveedor sea Ollama — es el cliente del endpoint
       OpenAI-compatible (`http://localhost:11434/v1`).
 - [ ] `README.md` (ambos): siguen diciendo "pon tu ANTHROPIC_API_KEY". Actualizar a Ollama

@@ -20,7 +20,7 @@ import re
 import sqlite3
 
 from .config import DB_PATH
-
+from contextlib import closing
 # Tope de filas devueltas al LLM. Ojo: no es solo una cuestión de latencia.
 # El resultado entra entero en el historial de la conversación, y con un
 # contexto de 8192 tokens (ver arrancar_ollama.sh) del que el system prompt y
@@ -74,7 +74,8 @@ def ejecutar_sql_seguro(sql: str) -> dict:
         return {"error": "La consulta contiene palabras clave no permitidas."}
 
     try:
-        with conexion_lectura() as conn:
+        # Usamos closing() para forzar el cierre del descriptor al salir del bloque
+        with closing(conexion_lectura()) as conn:
             cur = conn.execute(limpio)
             filas = cur.fetchmany(MAX_FILAS)
             columnas = [d[0] for d in cur.description] if cur.description else []
