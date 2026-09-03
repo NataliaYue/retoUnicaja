@@ -38,11 +38,14 @@ TOOLS = [
     {
         "name": "consultar_saldo",
         "description": (
-            "Consulta el saldo actual de la cuenta DEL TITULAR con el que estás hablando, "
-            "a través de la API del banco. Solo existe esa cuenta: no puedes consultar la de "
-            "ninguna otra persona. Si te preguntan por el saldo de otro (por ejemplo, de un "
-            "contacto de Bizum), NO llames a esta herramienta: no devolvería su saldo sino el "
-            "del titular, y responderías con el dato de otra persona."
+            "SOLO el saldo actual de la cuenta del titular: el dinero que hay ahora mismo. "
+            "Úsala cuando pregunte cuál es su saldo, cuánto dinero tiene o cuánto le queda. "
+            "NO la uses para nada que haya pasado: \"cuánto he gastado\", \"cuánto cobro de "
+            "nómina\" o \"cuánto me dejé en el súper\" son preguntas del histórico y van a "
+            "consultar_movimientos, aunque empiecen por \"cuánto\". "
+            "Solo existe la cuenta del titular: si te preguntan por la de otra persona, NO "
+            "llames a esta herramienta, porque devolvería el saldo del titular y estarías "
+            "dando el dato de otro."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -72,8 +75,10 @@ TOOLS = [
         "name": "consultar_movimientos",
         "description": (
             "Ejecuta una consulta SQL de SOLO LECTURA (SQLite) sobre el histórico "
-            "de movimientos del cliente. Úsala para cualquier pregunta sobre "
-            "gastos, ingresos, fechas o comparativas."
+            "de movimientos del cliente. Úsala para TODA pregunta sobre lo que ya "
+            "ha pasado: cuánto ha gastado, cobrado o ingresado, en qué comercios, "
+            "en qué categorías, en qué fechas, bizums anteriores y comparativas. "
+            "El SQL lo escribes tú."
         ),
         "input_schema": {
             "type": "object",

@@ -217,10 +217,13 @@ y la de las tablas: ~430 tokens con los que ese ejemplo ahora compite.
 Importa porque el fallo es **una respuesta invertida dicha con seguridad**: *"el gasto en
 supermercado y en restaurantes es el mismo: 6.043,91 €"*, cuando son 4.622 y 1.421.
 
-- [ ] Recortar el prompt otra vez, **después del vídeo**. Ahora está en 2.891 tokens (con el
-      esquema de tools) frente a los 2.396 de cuando se midió que iba bien. El precedente existe:
-      adelgazarlo en la Fase 5 no costó precisión. Tocarlo antes de grabar reabre algo que está
-      estable en todo lo demás.
+- [x] **Recortado**, y con eso se recuperó el caso: 0/3 → 3/3. El grueso de la duplicación estaba
+      en describir las mismas seis herramientas dos veces — 1.117 tokens en el prompt y 930 en sus
+      esquemas JSON, ambos en cada llamada. Cada bloque tenía dos mitades: *"cuándo llamarla"*, que
+      el esquema ya dice —y dice mejor, porque está pegado a la función, justo donde el modelo
+      decide— y *"cómo leer el resultado"*, que es lo ganado midiendo. Se quitó la primera.
+      **3.822 → 3.208 tokens fijos** (47 % → 39 % del contexto), respuesta final **85,7 % → 90,5 %**,
+      p90 de 10,7 a 9,8 s, y ninguna de las 17 reglas medidas perdida (verificadas una a una).
 
 ---
 
@@ -262,7 +265,10 @@ supermercado y en restaurantes es el mismo: 6.043,91 €"*, cuando son 4.622 y 1
 
 - *"¿cuánto cobro de nómina?"*: se cobra el día 28; si hoy es 27, filtra por el mes actual y dice
   que no hay nada. Se asume a favor de la latencia.
-- Preguntas sin periodo: se responde por el mes actual y se dice explícitamente.
+- ~~Preguntas sin periodo~~: **ya no falla.** `amb-sin-periodo` pasó de 0/3 a 3/3 al recortar el
+  prompt, sin tocar ninguna regla suya. Llevaba fallando desde la Fase 1 y se había dado por
+  asumido, pero no era una limitación del modelo: era dilución. Conviene revisar los otros dos de
+  esta lista con la misma sospecha antes de darlos por imposibles.
 - Al enumerar suscripciones, el modelo mete los recibos en la frase de "estás suscrito a…".
   Cifras y orden son correctos y el payload ya viene separado. Se descartó meter un ejemplo de
   redacción con cifras concretas en el prompt: un 8B puede copiarlas literalmente cuando los datos
