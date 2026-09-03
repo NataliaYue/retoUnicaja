@@ -1,13 +1,16 @@
-README EL AGENT.PY Y CAMBIOS EN REQUIREMENTS PARA FUNCIONAR CON OLLAMA Y NO SOLO CON CLAUDE
 # 🗣️ Habla con tu dinero — Asistente bancario conversacional
 
-Proyecto base para el **Reto IA de Unicaja & UGR** (Cátedra IA Responsable en Finanzas). Asistente bancario por **voz y texto** que consulta saldo, envía Bizums, responde preguntas sobre el histórico de movimientos convirtiendo **lenguaje natural → SQL**, y **decide y genera gráficos en tiempo real** sin plantillas.
+**Reto IA de Unicaja & UGR** (Cátedra IA Responsable en Finanzas). Asistente bancario por **voz y texto** que consulta el saldo, envía Bizums con PIN, responde sobre el histórico de movimientos convirtiendo **lenguaje natural → SQL**, detecta pagos recurrentes, **proyecta el gasto del mes** y **decide y genera en tiempo real la tabla o el gráfico** que mejor refuerza cada respuesta, sin plantillas.
+
+Corre **entero en local** sobre `qwen3:8b` con Ollama. Sin claves de API y sin coste por consulta.
 
 ---
 
 ## 1. Puesta en marcha (3 pasos)
 
 ```bash
+cd banco-conversacional     # todo lo demás se ejecuta desde aquí
+
 # 1) Modelo local (no hace falta ninguna clave de API)
 ollama pull qwen3:8b
 ./arrancar_ollama.sh        # en otra terminal: arranca Ollama con contexto 8192
@@ -21,36 +24,46 @@ python -m backend.seed      # crea banco.db con 24 meses de movimientos
 uvicorn backend.main:app --reload
 ```
 
-Abre **http://localhost:8000** (Chrome recomendado: el reconocimiento de voz del navegador funciona mejor). Prueba: *"¿Cuánto llevo gastado en gasolina este mes?"* → *"¿Y esta semana?"* → *"¿Cuándo pagué el seguro del coche?"* → *"Compara mis gastos por categoría de los últimos 3 meses"* → *"Envía 20 € a María López por Bizum"*.
+Abre **http://localhost:8000** (Chrome recomendado: el reconocimiento de voz del navegador funciona mejor).
+
+> ⚠️ **`arrancar_ollama.sh` no es opcional.** Fija `OLLAMA_CONTEXT_LENGTH=8192`; con los 4.096 por defecto el contexto desborda, Ollama trunca por delante, se pierde el system prompt y la calidad se cae **sin que nada lo avise**.
+
+> ⚠️ **Regenera `banco.db` antes de cada demo.** Los datos son relativos a *hoy*: en cuanto cambia el mes, "este mes" y "esta semana" salen vacíos.
+
+**Recorrido de demo**, en orden: *"¿Cuál es mi saldo?"* → *"¿Cuánto llevo gastado en gasolina este mes?"* (abre el chip del SQL) → *"¿Y esta semana?"* (contexto) → *"¿A qué estoy suscrito?"* (tabla) → *"¿Cuánto he gastado este mes comparado con el pasado?"* (gráfico) → *"¿Cuánto voy a gastar este mes?"* (previsión) → *"Haz un bizum de 20 euros a María López"* (PIN + saldo actualizándose).
 
 ---
 
-## 2. Arquitectura general
+## 2. Arquitectura
 
 ```
-┌──────────────────────── NAVEGADOR (frontend/index.html) ────────────────────────┐
-│  🎙️ STT (Web Speech API)   💬 Chat con streaming   📊 Vega-Lite   🔊 TTS        │
-└───────────────▲──────────────────────│──────────────────────────────────────────┘
-                │  eventos JSON        │  { "mensaje": "..." }
-                │  (texto, sql,        ▼
-                │  grafico, saldo)  WebSocket /ws
-┌───────────────┴─────────────────── BACKEND (FastAPI) ───────────────────────────┐
-│                                                                                  │
-│   main.py ──▶ agent.py  «bucle agéntico»                                         │
-│               │   LLM (Ollama / Qwen3) + historial de conversación + streaming   │
-│               │                                                                  │
-│               ▼ tool calling (tools.py)                                          │
-│   ┌────────────────┬──────────────────┬─────────────────────┬────────────────┐  │
-│   │ consultar_saldo│ enviar_bizum     │ consultar_movimientos│ mostrar_grafico│  │
-│   │ (API ficticia) │ (API ficticia)   │ (text-to-SQL)        │ (Vega-Lite)    │  │
-│   └───────┬────────┴────────┬─────────┴──────────┬──────────┴───────┬────────┘  │
-│           │ banking_api.py  │                    │ database.py      │ → WS       │
-│           ▼                 ▼                    ▼ (solo lectura)   ▼            │
-│                        SQLite banco.db  (seed.py: datos ficticios)               │
-└──────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────── NAVEGADOR (frontend/index.html) ─────────────────────┐
+│  🎙️ STT (Web Speech)   💬 Chat   📊 Vega-Lite   📋 Tablas   🔊 TTS       │
+└──────────────▲───────────────────────│───────────────────────────────────┘
+               │ eventos JSON          │ { "mensaje": … } / { "pin": … }
+               │                       ▼
+┌──────────────┴──────────── BACKEND (FastAPI) ────────────────────────────┐
+│  main.py ──▶ agent.py  «bucle agéntico»                                  │
+│              │  qwen3:8b vía Ollama + historial + streaming por frases    │
+│              │                                                            │
+│              ├─▶ atajos deterministas: saldo, Bizum (regex), PIN          │
+│              │                                                            │
+│              ▼ tool calling (tools.py) — 6 herramientas                   │
+│   ┌───────────────┬──────────────┬───────────────┬────────────────────┐  │
+│   │consultar_saldo│ enviar_bizum │ consultar_    │ analizar_          │  │
+│   │listar_contac. │              │ movimientos   │ suscripciones      │  │
+│   │               │              │ (text-to-SQL) │ proyectar_gasto    │  │
+│   └───────┬───────┴──────┬───────┴───────┬───────┴─────────┬──────────┘  │
+│           │banking_api.py│               │ database.py     │ analitica.py│
+│           ▼              ▼               ▼ (solo lectura)  ▼             │
+│                    SQLite banco.db  (seed.py, semilla fija)              │
+│                                                                          │
+│  graficos.py «motor visual» ──▶ tras responder, decide si hay algo que   │
+│              mostrar y le pide al LLM la tabla o el gráfico, aparte.      │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Idea central:** el "motor de razonamiento" no es un chatbot con `if`s, es un **LLM con herramientas** (*tool calling*). El modelo decide en cada turno si responde directamente, si necesita llamar a una API bancaria, si debe escribir SQL, o si un gráfico ayuda — y con qué tipo de gráfico. Todo el "razonamiento" está en el modelo; el código solo le da capacidades y le pone límites de seguridad.
+**Idea central:** el razonamiento vive en el LLM, pero **lo que un modelo de 8B no hace de forma fiable se resuelve en código**. Cada decisión está donde se demostró —midiendo— que funciona mejor. Esa frontera es el diseño del proyecto y está documentada en `TODO.md` con las mediciones que la justifican.
 
 ---
 
@@ -58,140 +71,181 @@ Abre **http://localhost:8000** (Chrome recomendado: el reconocimiento de voz del
 
 ### 3.1 El bucle agéntico (`backend/agent.py`)
 
-Cada conexión WebSocket crea un `Agente` con su **historial de conversación** (por eso funcionan las preguntas de seguimiento: tras "¿cuánto gasté en gasolina este mes?", un "¿y esta semana?" se entiende porque el LLM ve todo el contexto).
+Cada conexión WebSocket crea un `Agente` con su **historial**, que es lo que hace que funcionen los seguimientos: tras *"¿cuánto gasté en gasolina este mes?"*, un *"¿y esta semana?"* se entiende solo.
 
-Por cada mensaje del usuario:
+Por turno: se llama al LLM en streaming con el system prompt, el historial y las 6 herramientas; si pide herramientas se ejecutan, sus resultados vuelven al historial y se repite (máximo 8 iteraciones); si no, la respuesta es final.
 
-1. Se llama al LLM **en streaming** con: system prompt + historial + definición de las 4 herramientas.
-2. Cada token de texto se reenvía al navegador al instante (`{"type":"texto","delta":"..."}`).
-3. Si el LLM termina con `stop_reason == "tool_use"`, se ejecutan las herramientas pedidas, sus resultados se añaden al historial como `tool_result` y **se vuelve al paso 1**. Así el modelo puede encadenar: SQL → ver resultados → decidir gráfico → redactar conclusión.
-4. Si termina sin pedir herramientas, la respuesta es final y se emite `fin_respuesta` (el texto completo, que el frontend usa para el TTS).
+Tres detalles que salieron de medir, no de diseñar:
 
-Hay un tope de 8 iteraciones por mensaje para evitar bucles infinitos.
+- **Streaming por frases, no por tokens.** Es la unidad que el TTS lee sin cortar palabras. Cuidado con el punto de los millares: sin tratarlo, `"1.234,56 €"` emite *"Has gastado 1."* como si fuera una respuesta completa.
+- **Recorte del historial en frontera de turno.** Un mensaje `tool` sin el `assistant` que lo provocó deja el historial inconsistente y la API lo rechaza.
+- **Atajos deterministas** para saldo y Bizum: se resuelven sin pasar por el LLM y ahorran ~3 s. El de saldo es deliberadamente estricto —exige que *todas* las palabras estén en una lista blanca—, porque un falso negativo solo cuesta latencia y un falso positivo da una respuesta incorrecta.
 
-### 3.2 Text-to-SQL (`consultar_movimientos`) — los 30 puntos gordos
+### 3.2 Text-to-SQL (`consultar_movimientos`) — 30 pts
 
-- El **system prompt** (`config.py`) incluye el esquema completo de la BD comentado, la fecha de hoy y recetas de fechas relativas en SQLite (`strftime`, `date('now', ...)`). El LLM escribe la consulta él mismo.
-- El SQL se ejecuta en `database.py → ejecutar_sql_seguro()` con **defensa en profundidad**:
-  1. Conexión SQLite abierta en **modo solo lectura** (`mode=ro`): físicamente imposible escribir por esta vía.
-  2. Una única sentencia, que debe empezar por `SELECT` o `WITH`.
-  3. Lista negra de palabras clave (`INSERT`, `DROP`, `PRAGMA`, `ATTACH`...).
-  4. Máximo 200 filas devueltas (controla contexto y latencia).
-- **Autocorrección:** si la consulta falla, el error de SQLite se devuelve al LLM como resultado de la herramienta; en la siguiente vuelta del bucle el modelo corrige su SQL y reintenta. En la interfaz se ve el chip "Consulta con error (la IA se autocorrige)" seguido de la corregida — transparencia que queda muy bien en la demo y en la memoria.
-- El SQL generado siempre se muestra en la UI en un desplegable ⌕ (explicabilidad → "IA Responsable").
+El system prompt lleva el esquema de la BD, la fecha de hoy y cinco ejemplos de consulta. El LLM escribe el SQL; `database.py` lo ejecuta con **defensa en profundidad**:
 
-### 3.3 Operaciones (`consultar_saldo`, `enviar_bizum`)
+1. Conexión SQLite en **modo solo lectura** (`mode=ro`): físicamente imposible escribir por esta vía.
+2. Una única sentencia, que debe empezar por `SELECT` o `WITH`.
+3. Lista negra de palabras clave (`INSERT`, `DROP`, `PRAGMA`, `ATTACH`…).
+4. Máximo **50 filas**. No es solo latencia: el resultado entra entero en el historial, y con 8.192 tokens de contexto un resultado grande lo desborda en un solo turno.
 
-`banking_api.py` simula los endpoints internos del banco (devuelven dicts con forma de respuesta de API). Son las **únicas** funciones con acceso de escritura a la BD, siempre con parámetros ligados (`?`), nunca con SQL del LLM.
+**Autocorrección:** si la consulta falla, el error de SQLite se le devuelve al LLM como resultado de la herramienta y en la siguiente vuelta corrige. En la interfaz se ve el chip *"Consulta con error (la IA se autocorrige)"* seguido de la buena.
 
-Flujo de un Bizum (con confirmación, exigida en el system prompt):
+El SQL generado **siempre se muestra** en un desplegable ⌕ — explicabilidad, no adorno.
+
+### 3.3 Operaciones: Bizum con PIN — 10 pts
+
+`banking_api.py` simula los endpoints del banco. Son las **únicas** funciones con acceso de escritura, siempre con parámetros ligados (`?`), nunca con SQL del LLM.
 
 ```
-Usuario:  "Mándale 20 euros a María"
-LLM:      "Voy a enviar 20,00 € por Bizum a María López. ¿Lo confirmas?"   ← NO llama a la tool
+Usuario:  "Haz un bizum de 20 euros a María"
+Backend:  valida el IMPORTE (0,50–1.000 €) ANTES de nada
+          resuelve el contacto → "¿Querías decir María López?"
 Usuario:  "Sí"
-LLM:      → tool enviar_bizum(destinatario="María López", cantidad=20)
-API:      valida límites Bizum (0,50–1.000 €) y saldo → descuenta y registra el movimiento
-UI:       la píldora de saldo de la cabecera se actualiza al momento (evento "saldo")
-LLM:      "¡Hecho! He enviado 20 € a María López. Tu saldo es ahora de 1.944,51 €."
+Backend:  → despliega el teclado numérico del PIN   (evento pedir_pin)
+Usuario:  teclea el PIN                             (evento auth_bizum)
+API:      comprueba límite diario y saldo, y descuenta — todo en UNA transacción
+UI:       la píldora de saldo se actualiza al momento
 ```
 
-### 3.4 Motor visual dinámico (`mostrar_grafico`) — sin plantillas
+Cuatro cosas que importan y no se ven:
 
-En lugar de tener funciones tipo `pintar_barras()`, el LLM genera **la especificación Vega-Lite v5 completa, en JSON, desde cero**, con los datos reales incrustados (`data.values`) y títulos/ejes en español. El frontend solo hace `vegaEmbed(spec)`.
+- **El importe se valida antes de pedir el PIN.** Pedir una clave para una operación que ya se sabe que va a fallar es mal diseño de seguridad; antes, un envío de 2.000 € recorría el flujo entero y solo fallaba después de teclearla.
+- **El PIN nunca entra en el historial del LLM.** Viaja por un evento distinto (`auth_bizum`), lo valida Python, y la IA nunca lo ve.
+- **El envío es atómico.** Leer el saldo, comprobarlo y actualizarlo va dentro de una transacción `BEGIN IMMEDIATE`. Sin eso, dos envíos simultáneos leen el mismo saldo, los dos pasan la comprobación y uno pisa al otro: salen 1.200 € de una cuenta con 1.000. Está reproducido y cubierto por un test.
+- **Límite diario de 500 €** para las operaciones por chat, aparte del límite por operación.
 
-- **Lógica visual (10 pts):** el system prompt le pide razonar el tipo (serie temporal → línea/barras por periodo; distribución → barras ordenadas o donut; patrón cíclico → radial...) y la herramienta exige un campo `razonamiento`, que se muestra bajo el gráfico como *"Por qué este gráfico: …"*. La decisión es autónoma y **queda demostrada en pantalla**.
-- **Sin plantillas (10 pts):** en el repositorio no existe ni una sola spec de gráfico; el backend valida únicamente que llegue un objeto con `data` y lo reenvía. Cambia la pregunta y cambia el gráfico.
-- El frontend inyecta solo el **tema** (paleta y tipografía) para que cualquier gráfico case con la interfaz — estilo ≠ plantilla: la estructura la decide la IA.
+### 3.4 Analítica avanzada (`backend/analitica.py`)
 
-### 3.5 Voz (entrada y salida)
+**Pagos recurrentes.** *"¿A qué estoy suscrito?"* no es una consulta, es una inferencia: la recurrencia no está en ninguna columna. Lo que la delata no es el importe —el recibo de la luz varía tanto como un repostaje— sino la **regularidad de los intervalos** entre cargos. Validado contra 500 semillas distintas: 0 falsos negativos, 1 falso positivo.
 
-- **STT:** Web Speech API del navegador (`SpeechRecognition`, `lang: es-ES`) con resultados intermedios visibles mientras hablas; al detectar el final, se envía solo.
-- **TTS:** `speechSynthesis` con voz en español. Se activa con el botón 🔊 o automáticamente si tu último mensaje fue por voz (conversación manos libres).
-- Ventaja: cero latencia añadida y cero coste (todo local en el navegador). El system prompt pide respuestas breves y sin Markdown precisamente para que suenen naturales leídas en voz alta.
-- *Mejora opcional* (ver §6): sustituir por Whisper + un TTS neuronal, o por una Realtime API voz-a-voz.
+**Proyección de gasto** (*Analítica Predictiva* del enunciado). La regla de tres —gasto hasta hoy ÷ días × días del mes— es inservible, porque el alquiler y los recibos caen a principios de mes. Error medio sobre 23 meses del histórico:
 
-### 3.6 Datos ficticios (`backend/seed.py`)
-
-Generador determinista (semilla fija → BD reproducible para depurar y grabar el vídeo) con ~630 movimientos en ~15 meses: nómina, alquiler, recibos (luz/agua/internet), suscripciones, gimnasio, **seguro del coche anual** (la pregunta del enunciado), gasolina y supermercado semanales, restaurantes, Bizums, etc., con comercios españoles reales. El docstring incluye el prompt equivalente por si preferís generar los datos 100% con un LLM, como sugiere el reto.
-
-### 3.7 Protocolo WebSocket
-
-| Evento (servidor → cliente) | Contenido | Uso en la UI |
+| | día 5 | día 15 |
 |---|---|---|
-| `inicio_respuesta` | — | crea la burbuja del asistente |
-| `texto` | `delta` | streaming token a token |
-| `sql` | `sql`, `proposito`, `error` | chip desplegable con la consulta |
-| `grafico` | `spec` (Vega-Lite), `razonamiento` | tarjeta de gráfico + explicación |
-| `saldo` | `valor` | píldora de saldo de la cabecera |
-| `fin_respuesta` | `texto` completo | dispara el TTS |
-| `error` | `detalle` | aviso en el chat |
+| regla de tres | **174,5 %** | 46,1 % |
+| pagos fijos aparte | 31,7 % | 13,6 % |
+| **+ media histórica** | **8,7 %** | **8,4 %** |
 
-Cliente → servidor: `{"mensaje": "texto del usuario"}`.
+Y **cada proyección viene con su margen de error**, calculado proyectando cada mes pasado y midiendo cuánto falló: 0 % en alquiler (es fijo), ~20 % en supermercado, **105 % en bizums enviados**. Dar una cifra seca para todas habría sido creíble y falso.
+
+### 3.5 Motor visual: tabla o gráfico — 20 pts
+
+El enunciado pide *"gráficos y tablas"*, y la decisión se reparte así:
+
+| | quién decide |
+|---|---|
+| ¿hay algo que mostrar? | **backend**, regla determinista sobre la forma del resultado |
+| ¿tabla o gráfico? | **el LLM** |
+| ¿qué marca, ejes, columnas? ¿por qué? | **el LLM** |
+
+**Por qué el "cuándo" no lo decide el modelo:** está medido. Sobre cuatro variantes del prompt y tres vueltas de las 44 preguntas, su decisión resultó inestable ante *cualquier* edición del prompt, aunque no hablara de gráficos. Cinco de las seis preguntas que debían acabar en gráfico no pintaban nunca. Con el gate determinista: **27/27**.
+
+La spec la genera el LLM entera y desde cero en una **llamada dedicada** —tarea única, prompt mínimo—, así que *sin plantillas* se mantiene: en el repositorio no hay ni una sola spec. Los datos los inyecta el backend, que ya los tiene: quita ~700 tokens de generación por visual y elimina de raíz que se invente cifras.
+
+Esa llamada va **después** de `fin_respuesta`, que es lo que dispara el TTS: el usuario oye la respuesta de inmediato y el visual aparece mientras la escucha, con un indicador de que se está preparando.
+
+### 3.6 Voz
+
+- **STT:** Web Speech API (`lang: es-ES`), con resultados intermedios visibles.
+- **TTS:** `speechSynthesis`, **frase a frase según llegan**. En una respuesta larga se empieza a oír **6 segundos antes**.
+- Todo local en el navegador: cero latencia de red y cero coste.
+
+### 3.7 Datos ficticios (`backend/seed.py`)
+
+Generador determinista (`random.seed(42)` → BD reproducible) con ~1.000 movimientos en **24 meses**: nómina, alquiler, recibos, suscripciones, gimnasio, seguro del coche anual, gasolina, supermercado, restaurantes, Bizums… Los 24 meses no son un capricho: con 15 el seguro anual solo tenía un cargo y era imposible detectarlo como recurrente.
+
+### 3.8 Protocolo WebSocket
+
+| Evento (servidor → cliente) | Uso en la UI |
+|---|---|
+| `inicio_respuesta` | crea la burbuja del asistente |
+| `texto` | streaming, una frase por evento |
+| `descartar_texto` | retira lo mostrado si el modelo acaba llamando a una tool |
+| `tool_inicio` | spinner con estado ("Consultando histórico…") |
+| `sql` | chip desplegable con la consulta |
+| `visual_generando` | aviso de que se prepara una tabla o un gráfico |
+| `grafico` / `tabla` | la tarjeta, con el *"por qué esta representación"* |
+| `visual_cancelado` | retira el aviso si no sale nada pintable |
+| `pedir_pin` | despliega el teclado numérico |
+| `saldo` | píldora de saldo de la cabecera |
+| `fin_respuesta` | cierra el turno |
+| `error` | aviso en el chat |
+
+Cliente → servidor: `{"mensaje": …}` y `{"type": "auth_bizum", "pin": …}`.
 
 ---
 
-## 4. Mapeo directo al baremo (100 pts)
+## 4. Cómo se mide (`tests/`)
 
-| Criterio | Pts | Dónde se gana en este proyecto |
-|---|---|---|
-| Conversación | 15 | Historial completo por sesión (seguimientos, confirmaciones), system prompt con estilo natural en español |
-| Agilidad | 15 | Streaming token a token por WebSocket + modelo local rápido (Ollama/Qwen3) + voz local sin latencia de red |
-| Operaciones | 10 | `banking_api.py` como APIs ficticias invocadas vía *skills* (tools), con validaciones y confirmación de Bizum |
-| Consultas NL→SQL | 30 | Esquema en el prompt, recetas de fechas, ejecución segura de solo lectura, autocorrección ante errores |
-| Lógica visual | 10 | La IA decide el tipo de gráfico y su `razonamiento` se muestra en pantalla |
-| Sin plantillas | 10 | Spec Vega-Lite completa generada por el LLM en cada respuesta; cero specs en el código |
-| Vídeo + memoria | 10 | §5 de este README: guion sugerido y esqueleto de la memoria |
+Nada de lo de arriba se afirma sin medirlo. Tres suites:
 
----
+```bash
+python -m tests.test_bizum          # 35 comprobaciones del flujo de dinero. Sin LLM, ~10 s
+python -m tests.test_recurrencia    # detector contra N semillas. Sin LLM, ~30 s
+python -m tests.evaluar --repeticiones 3   # 44 preguntas. Necesita Ollama, ~13 min
+```
 
-## 5. Entregables: guion del vídeo y esqueleto de la memoria
+`evaluar.py` puntúa **cuatro cosas**, porque fallan por motivos distintos: elección de herramienta, respuesta final, refuerzo visual cuando toca (cuenta igual tabla que gráfico: la representación la elige el modelo) y que la spec llegue pintable. Y mide **la latencia hasta la voz** aparte de la total, porque el motor visual va después a propósito.
 
-**Vídeo (máx. 3 min):** 0:00 interfaz + pregunta por voz "¿cuál es mi saldo?" → 0:25 "¿cuánto llevo gastado en gasolina este mes?" y abrir el chip SQL → 0:50 "¿y esta semana?" (demuestra contexto) → 1:10 "compara mis gastos por categoría de los últimos 3 meses" (gráfico + razonamiento) → 1:40 pregunta que fuerce OTRO tipo de gráfico, p. ej. "evolución de mis gastos mes a mes en el último año" (demuestra que no hay plantillas) → 2:10 Bizum con confirmación y saldo actualizándose → 2:40 diagrama de arquitectura en una diapositiva.
+Los valores esperados se recalculan desde la BD en cada ejecución, así que no caducan al regenerarla.
 
-**Memoria:** (1) objetivo y alcance; (2) arquitectura (diagrama del §2); (3) diseño del agente y las tools; (4) text-to-SQL: prompt, seguridad y autocorrección, con la tabla de precisión del §7; (5) motor visual: por qué Vega-Lite generado por LLM; (6) IA responsable: solo lectura, confirmación de operaciones, explicabilidad del SQL, datos ficticios; (7) latencia medida; (8) líneas futuras.
+**Estado actual** (44 preguntas × 3 vueltas, `qwen3:8b`):
 
----
+| | |
+|---|---|
+| Elección de herramienta | **97,6 %** |
+| Respuesta final correcta | **90,5 %** |
+| Refuerzo visual cuando toca | **27/27** |
+| Specs que llegan a pintarse | **21/21** |
+| Latencia hasta la voz (mediana) | **3,3 s** |
 
-## 6. Ideas para subir nota (orden coste/beneficio)
-
-1. **Set de evaluación**: `tests/preguntas.jsonl` con 30 preguntas y su resultado esperado; script que las lanza contra el agente y mide precisión del SQL. Material de oro para la memoria.
-2. **Streaming de TTS por frases**: trocear `texto` por puntuación y hablar cada frase según llega (baja aún más la latencia percibida).
-3. **Whisper para STT** (`faster-whisper` en local o API): más robusto que el reconocedor del navegador.
-4. **Realtime API voz-a-voz** (OpenAI Realtime / Gemini Live) con las mismas tools: demo espectacular, más complejidad.
-5. Multiusuario ficticio (login simple + `cliente_id` en las consultas).
+> **No compares configuraciones con una sola vuelta.** La varianza de qwen3:8b es de ±1 caso; una diferencia de 2 en un pase suelto es ruido. Usa `--repeticiones 3`.
 
 ---
 
-## 7. Estructura del repositorio
+## 5. IA Responsable
+
+- **El LLM no puede escribir en la base de datos.** Su única vía es una conexión en modo solo lectura.
+- **El PIN nunca llega al modelo**: viaja por un evento aparte y lo valida Python.
+- **Toda operación de dinero exige PIN**, con 3 intentos y límites de importe y diarios.
+- **El SQL se muestra siempre**: cualquiera puede ver de dónde sale cada cifra.
+- **La previsión dice lo que se fía de sí misma** en vez de dar una cifra seca.
+- **Nunca inventa cifras**: toda cantidad sale de una herramienta.
+- **Sesión con caducidad** (30 min) y login previo a abrir el WebSocket.
+- Datos **100 % ficticios**.
+
+---
+
+## 6. Estructura
 
 ```
 banco-conversacional/
-├── README.md              ← este documento
-├── requirements.txt
-├── .env.example           ← proveedor (ollama) y modelo (qwen3:8b)
+├── README.md · requirements.txt · .env.example
+├── arrancar_ollama.sh     ← ctx 8192; sin esto la calidad cae en silencio
 ├── banco.db               ← se genera con: python -m backend.seed
 ├── backend/
-│   ├── config.py          ← modelo, esquema BD, system prompt (¡el cerebro se ajusta aquí!)
-│   ├── seed.py            ← generación de datos ficticios (reproducible, semilla 42)
-│   ├── database.py        ← capa SQL segura de solo lectura para el LLM
-│   ├── banking_api.py     ← APIs ficticias: saldo y Bizum (única vía de escritura)
-│   ├── tools.py           ← esquemas de las 4 herramientas + dispatcher
-│   ├── agent.py           ← bucle agéntico con streaming
+│   ├── config.py          ← modelo, límites, esquema BD y system prompt
+│   ├── seed.py            ← datos ficticios reproducibles (semilla 42)
+│   ├── database.py        ← SQL de solo lectura + transacción de escritura
+│   ├── banking_api.py     ← APIs ficticias: saldo, contactos y Bizum
+│   ├── analitica.py       ← pagos recurrentes y proyección de gasto
+│   ├── graficos.py        ← motor visual: gate + llamada dedicada
+│   ├── tools.py           ← esquemas de las herramientas + dispatcher
+│   ├── agent.py           ← bucle agéntico, atajos y flujo de Bizum
 │   └── main.py            ← FastAPI: WebSocket /ws + sirve el frontend
-└── frontend/
-    └── index.html         ← chat, voz (Web Speech API) y render Vega-Lite (sin build, sin npm)
+├── frontend/
+│   └── index.html         ← chat, voz, Vega-Lite y tablas (sin build, sin npm)
+└── tests/
+    ├── preguntas.jsonl    ← 44 preguntas etiquetadas
+    ├── evaluar.py         ← banco de precisión
+    ├── test_bizum.py      ← flujo de dinero, determinista
+    └── test_recurrencia.py← detector contra N semillas
 ```
 
-## 8. 🛡️ Capa de Seguridad y Autenticación (Nuevas Features)
+`TODO.md` lleva lo que queda por hacer y las decisiones abiertas, con las mediciones que las respaldan.
 
-Para acercar el asistente a los estándares reales de la banca y garantizar un entorno seguro, se ha implementado una arquitectura de defensa en profundidad:
-
-*   **Autenticación Inicial (Login):** La interfaz está bloqueada por defecto. La conexión WebSocket con el servidor (y por tanto, la instanciación del agente LLM) no se establece hasta que el usuario se identifica correctamente en el frontend.
-*   **Cierre de sesión por inactividad (Timeout):** El backend monitoriza el flujo de mensajes. Si transcurren 5 minutos sin interacción, el servidor cierra automáticamente el WebSocket, destruyendo el historial y la sesión del agente.
-*   **Step-up Authentication (Teclado Seguro):** Las operaciones críticas (como enviar un Bizum) no se pueden confirmar mediante texto libre en el chat. El backend envía una señal que despliega un teclado numérico virtual en pantalla para solicitar el PIN de operaciones.
-*   **Privacidad Zero-Knowledge (El LLM no memoriza claves):** El PIN introducido viaja por el WebSocket bajo un tipo de evento distinto (`auth_bizum`). El código Python intercepta este evento y lo valida contra la base de datos de forma nativa. **La contraseña jamás se añade al historial de la conversación ni es leída por la IA**.
-*   **Límites de riesgo (Control de fraude):** Se ha establecido un límite de seguridad estricto para las operaciones mediante el chatbot (500 € diarios). El backend suma en tiempo real los movimientos del día y bloquea la operación si se supera este umbral, previniendo el vaciado de cuentas en caso de sesión desatendida.
 ---
 
-*Proyecto de demostración con datos 100% ficticios. Ninguna operación afecta a dinero real.*
+*Proyecto de demostración con datos 100 % ficticios. Ninguna operación afecta a dinero real.*
