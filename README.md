@@ -81,7 +81,7 @@ Tres detalles que salieron de medir, no de diseñar:
 - **Recorte del historial en frontera de turno.** Un mensaje `tool` sin el `assistant` que lo provocó deja el historial inconsistente y la API lo rechaza.
 - **Atajos deterministas** para saldo y Bizum: se resuelven sin pasar por el LLM y ahorran ~3 s. El de saldo es deliberadamente estricto —exige que *todas* las palabras estén en una lista blanca—, porque un falso negativo solo cuesta latencia y un falso positivo da una respuesta incorrecta.
 
-### 3.2 Text-to-SQL (`consultar_movimientos`) — 30 pts
+### 3.2 Text-to-SQL (`consultar_movimientos`)
 
 El system prompt lleva el esquema de la BD, la fecha de hoy y cinco ejemplos de consulta. El LLM escribe el SQL; `database.py` lo ejecuta con **defensa en profundidad**:
 
@@ -94,7 +94,7 @@ El system prompt lleva el esquema de la BD, la fecha de hoy y cinco ejemplos de 
 
 El SQL generado **siempre se muestra** en un desplegable ⌕ — explicabilidad, no adorno.
 
-### 3.3 Operaciones: Bizum con PIN — 10 pts
+### 3.3 Operaciones: Bizum con PIN
 
 `banking_api.py` simula los endpoints del banco. Son las **únicas** funciones con acceso de escritura, siempre con parámetros ligados (`?`), nunca con SQL del LLM.
 
@@ -130,7 +130,7 @@ Cuatro cosas que importan y no se ven:
 
 Y **cada proyección viene con su margen de error**, calculado proyectando cada mes pasado y midiendo cuánto falló: 0 % en alquiler (es fijo), ~20 % en supermercado, **105 % en bizums enviados**. Dar una cifra seca para todas habría sido creíble y falso.
 
-### 3.5 Motor visual: tabla o gráfico — 20 pts
+### 3.5 Motor visual: tabla o gráfico
 
 El enunciado pide *"gráficos y tablas"*, y la decisión se reparte así:
 
