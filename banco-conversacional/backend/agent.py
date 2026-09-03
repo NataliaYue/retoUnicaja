@@ -1137,6 +1137,13 @@ class Agente:
             nombre_tool, resultado = ultimo_representable
             columnas, filas = normalizar(nombre_tool, resultado)
 
+            if filas:
+                # Aviso de que viene algo. Sin esto, el usuario lee la respuesta,
+                # se queda unos segundos sin nada, y de pronto aparece una tabla:
+                # no sabía si iba a pasar algo o si el turno había terminado.
+                # `tool_inicio` no cubre este tramo, porque va por otra vía.
+                await self.emitir({"type": "visual_generando"})
+
             tipo, payload, razonamiento = await generar_visual(
                 client, MODELO, mensaje_usuario, columnas, filas,
                 extra_body=EXTRA_BODY,
@@ -1154,3 +1161,7 @@ class Agente:
                     {**payload, "razonamiento": razonamiento},
                     self.emitir,
                 )
+            elif filas:
+                # No salió nada pintable: hay que retirar el aviso o se queda
+                # girando para siempre.
+                await self.emitir({"type": "visual_cancelado"})

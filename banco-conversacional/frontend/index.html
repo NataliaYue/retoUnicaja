@@ -219,6 +219,16 @@
   }
   .tarjeta-grafico .porque b{color:var(--verde)}
 
+  /* Aviso de que se está preparando una tabla o un gráfico. Ocupa el mismo
+     sitio y tiene la misma forma que la tarjeta final, para que al llegar el
+     resultado se sustituya sin dar un salto en la conversación. */
+  .tarjeta-generando{
+    background:var(--superficie); border:1px dashed var(--linea);
+    border-radius:var(--radio); padding:18px 14px; width:min(640px, 100%);
+    display:flex; align-items:center; gap:10px;
+    color:var(--tinta-suave); font-size:13.5px;
+  }
+
   /* Tablas: la otra mitad de la Generative UI. Misma tarjeta que el gráfico
      para que se lean como dos formas de lo mismo, no como dos componentes. */
   .tarjeta-grafico .tabla-scroll{width:100%; overflow-x:auto}
@@ -432,6 +442,12 @@ let bloqueActual = null;   // contenedor de la respuesta en curso
 let burbujaActual = null;  // burbuja de texto en streaming
 let turnoActivo = false;   // hay un turno abierto (aún puede llegar más texto)
 let habladoEnStreaming = false;  // ya se ha ido leyendo la respuesta por frases
+let avisoVisual = null;    // tarjeta de "preparando una vista…", si está puesta
+
+function quitarAvisoVisual(){
+  avisoVisual?.remove();
+  avisoVisual = null;
+}
 let ttsActivo = false;     // hablar las respuestas en voz alta
 let ultimaEntradaFueVoz = false;
 let bufferVoz = ''; // NUEVO: Acumula texto para hablar por frases
@@ -513,6 +529,9 @@ function manejarEvento(ev){
     case 'inicio_respuesta':
       turnoActivo = true;
       habladoEnStreaming = false;
+      // Si el turno anterior dejó un aviso a medias, se retira: si no, se
+      // queda girando en un bloque que ya nadie va a completar.
+      quitarAvisoVisual();
       bloqueActual = document.createElement('div');
       bloqueActual.className = 'bloque-asistente';
       burbujaActual = document.createElement('div');
@@ -569,6 +588,23 @@ function manejarEvento(ev){
       bajar();
       break;
 
+    case 'visual_generando': {
+      // El motor visual va DESPUÉS de fin_respuesta para no retrasar la voz,
+      // así que este hueco es el único aviso de que aún viene algo.
+      quitarAvisoVisual();
+      avisoVisual = document.createElement('div');
+      avisoVisual.className = 'tarjeta-generando';
+      avisoVisual.innerHTML = '<span class="spinner"></span>Preparando una vista de estos datos…';
+      bloqueActual?.appendChild(avisoVisual);
+      bajar();
+      break;
+    }
+
+    case 'visual_cancelado':
+      // No salió nada pintable; si no se retira, el spinner gira para siempre.
+      quitarAvisoVisual();
+      break;
+
     case 'descartar_texto':
       // El modelo escribió texto y DESPUÉS llamó a una herramienta: lo que se
       // mostró no era la respuesta, responderán las tools. Se retira y se
@@ -611,6 +647,7 @@ function manejarEvento(ev){
     }
 
     case 'grafico': { // la IA ha decidido y construido un gráfico Vega-Lite
+      quitarAvisoVisual();
       const tarjeta = document.createElement('div');
       tarjeta.className = 'tarjeta-grafico';
       const vega = document.createElement('div');
@@ -644,6 +681,7 @@ function manejarEvento(ev){
     }
 
     case 'tabla': { // la IA ha decidido que estos datos se leen mejor en tabla
+      quitarAvisoVisual();
       const tarjeta = document.createElement('div');
       tarjeta.className = 'tarjeta-grafico';
 
@@ -744,6 +782,7 @@ function manejarEvento(ev){
       break;
 
     case 'error': {
+      quitarAvisoVisual();
       const e = document.createElement('div');
       e.className = 'aviso-error';
       e.textContent = 'Ha ocurrido un problema: ' + ev.detalle;

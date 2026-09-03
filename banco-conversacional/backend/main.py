@@ -14,9 +14,11 @@ Protocolo WebSocket (JSON en ambos sentidos):
     { "type": "inicio_respuesta" }
     { "type": "texto", "delta": "Has gastado " }         (muchos, en streaming)
     { "type": "sql", "sql": "SELECT ...", "proposito": "...", "error": null }
+    { "type": "visual_generando" }        (el motor visual está preparando algo)
     { "type": "grafico", "spec": {...vega-lite...}, "razonamiento": "..." }
     { "type": "tabla", "title": "...", "columnas": [{"campo","titulo","formato"}],
                        "filas": [{...}], "razonamiento": "..." }
+    { "type": "visual_cancelado" }        (no salió nada pintable: retirar el aviso)
     { "type": "saldo", "valor": 3421.55 }
     { "type": "fin_respuesta", "texto": "Has gastado 84,20 € ..." }
     { "type": "error", "detalle": "..." }
