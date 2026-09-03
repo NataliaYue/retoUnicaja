@@ -143,10 +143,11 @@ Son los únicos puntos que dependen solo de ti, y no se improvisan el último d�
 - [ ] **Streaming percibido**: `agent.py` bufferiza todo el texto y lo emite al final de la
       iteración (para no mostrar texto previo a las tools). Emitir deltas en cuanto llegue texto
       y cortar/limpiar si aparece un tool call en el mismo turno.
-- [x] **Indicador durante las tools**: evento `tool_inicio` + spinner con estado en el frontend.
-      Medido: no cuesta latencia (3,1 s hasta la voz, igual que antes).
-      Ojo: **no se emite para el motor visual**, que va tras `fin_respuesta`. Es coherente —ahí el
-      usuario ya está oyendo la respuesta— pero conviene saberlo si algún día se echa en falta.
+
+- [ x] **Indicador durante las tools**: evento `{"type": "tool_inicio", "nombre": ...}` antes de
+      `ejecutar_tool`, y spinner con estado en el frontend ("Consultando movimientos…"). Hoy solo
+      hay el punto parpadeante de la burbuja vacía.
+
 - [ ] **TTS por frases**: trocear por puntuación y hablar cada frase según llega.
 
 ### Operaciones (10 pts)
