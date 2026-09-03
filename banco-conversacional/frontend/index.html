@@ -349,6 +349,7 @@ let ws = null;
 let bloqueActual = null;   // contenedor de la respuesta en curso
 let burbujaActual = null;  // burbuja de texto en streaming
 let turnoActivo = false;   // hay un turno abierto (aún puede llegar más texto)
+let habladoEnStreaming = false;  // ya se ha ido leyendo la respuesta por frases
 let ttsActivo = false;     // hablar las respuestas en voz alta
 let ultimaEntradaFueVoz = false;
 
@@ -428,6 +429,7 @@ function manejarEvento(ev){
 
     case 'inicio_respuesta':
       turnoActivo = true;
+      habladoEnStreaming = false;
       bloqueActual = document.createElement('div');
       bloqueActual.className = 'bloque-asistente';
       burbujaActual = document.createElement('div');
@@ -454,7 +456,7 @@ function manejarEvento(ev){
       clearPin();   // limpia también el PIN en memoria, no solo el display
       break;
 
-    case 'texto': // streaming token a token
+    case 'texto': // el backend emite frase a frase, según las va redactando
       if (burbujaActual) {
         // Si la burbuja era la de carga, la convertimos en una normal
         if (burbujaActual.classList.contains('cargando')) {
@@ -463,7 +465,25 @@ function manejarEvento(ev){
         }
         burbujaActual.textContent += ev.delta;
       }
+      // TTS por frases: se habla cada trozo en cuanto llega, en vez de esperar
+      // a tener la respuesta entera. speechSynthesis encola sola las frases,
+      // así que se oyen seguidas.
+      if (ttsActivo || ultimaEntradaFueVoz) {
+        hablar(ev.delta);
+        habladoEnStreaming = true;
+      }
       bajar();
+      break;
+
+    case 'descartar_texto':
+      // El modelo escribió texto y DESPUÉS llamó a una herramienta: lo que se
+      // mostró no era la respuesta, responderán las tools. Se retira y se
+      // calla el TTS para no leer algo que se va a contradecir.
+      if (burbujaActual) burbujaActual.textContent = '';
+      if (habladoEnStreaming) {
+        speechSynthesis.cancel();
+        habladoEnStreaming = false;
+      }
       break;
     case 'tool_inicio':
       if (burbujaActual && !burbujaActual.textContent.trim()) {
@@ -590,7 +610,10 @@ function manejarEvento(ev){
     case 'fin_respuesta':
       turnoActivo = false;
       if (burbujaActual && !burbujaActual.textContent) burbujaActual.remove();
-      if (ev.texto && (ttsActivo || ultimaEntradaFueVoz)) hablar(ev.texto);
+      // Solo se lee la respuesta entera si NO se fue hablando por frases; si
+      // no, se oiría dos veces.
+      if (!habladoEnStreaming && ev.texto && (ttsActivo || ultimaEntradaFueVoz)) hablar(ev.texto);
+      habladoEnStreaming = false;
       ultimaEntradaFueVoz = false;
       bajar();
       break;

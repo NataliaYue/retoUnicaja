@@ -34,7 +34,26 @@
 - **Cada regla del system prompt se dice UNA sola vez.** Repetirla le roba peso a las demás y
   cuesta latencia en cada turno, porque el prompt viaja entero en todas las llamadas.
 
----
+## Los tres tests
+
+```bash
+cd banco-conversacional
+
+# Flujo de Bizum: regex → contacto → PIN → envío. Sin LLM, determinista, ~10 s.
+.venv/bin/python -m tests.test_bizum
+
+# Detector de pagos recurrentes contra N semillas. Sin LLM, ~30 s.
+.venv/bin/python -m tests.test_recurrencia 50
+
+# Banco de precisión. NECESITA Ollama arrancado y la BD del día. ~13 min.
+python -m backend.seed && .venv/bin/python -m tests.evaluar --repeticiones 3
+```
+
+Los tres devuelven código de salida 0 si todo pasa.
+
+**Ojo con qué cubre cada uno.** `evaluar.py` NO toca el flujo de envío de Bizum (sus preguntas de
+"bizum" son consultas sobre bizums pasados), así que para tocar ese código el que vale es
+`test_bizum`. Y al revés: `test_bizum` no ve nada de precisión ni de gráficos.
 
 ---
 
@@ -145,9 +164,15 @@ Son los únicos puntos que dependen solo de ti, y no se improvisan el último d�
 
 # 🟡 Deuda técnica
 
-- [ ] **El flujo Bizum sigue escrito dos veces**: `preparar_bizum_desde_backend()` y la rama del
-      tool call en `_procesar()`. La validación del importe tapó la divergencia, pero no la causa,
-      y `agent.py` va por ~1.000 líneas. Extraer un `iniciar_bizum()` común, o un `bizum.py`.
+- [x] **El flujo Bizum estaba escrito dos veces** y las copias ya habían divergido: la del backend
+      no validaba el importe. Ahora `iniciar_bizum()` es el único sitio donde vive; la diferencia
+      real entre las dos vías (registrar el `tool_result` en el historial, que sin él la API
+      rechaza la petición siguiente) queda aislada en un parámetro.
+      `agent.py` 1.116 → 1.059 líneas · `_procesar()` ~410 → 276.
+      **Antes del refactor se escribió `tests/test_bizum.py`**, porque `evaluar.py` NO cubre ese
+      camino: sus cuatro preguntas de "bizum" son consultas sobre bizums pasados. Se podía romper
+      el envío entero y el banco habría seguido dando 97 %. 32/32 antes y después, y el banco
+      completo sin mover una cifra (96/108 exactos en las dos vueltas, ningún caso peor).
 - [x] **Fuga de conexiones SQLite**: `with conexion_lectura() as conn:` **no cierra** la conexión
       — el context manager de sqlite3 solo hace commit/rollback. Afecta a `database.py` y a todo
       `banking_api.py`. Cada consulta deja un descriptor abierto.

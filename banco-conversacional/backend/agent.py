@@ -167,6 +167,61 @@ def validar_importe_bizum(cantidad: float) -> str | None:
     return None
 
 
+def frases_emitibles(buffer: str, ya_emitido: int, *, final: bool = False) -> tuple[str, int]:
+    """
+    Del texto acumulado, devuelve el trozo listo para mostrar y la nueva marca.
+
+    Se emite **por frases completas**, no por tokens, por tres razones:
+    - Es la unidad que el TTS puede leer sin cortar a mitad de palabra.
+    - Limita el parpadeo si la iteración acaba en un tool call y hay que
+      descartar lo mostrado: se descarta una frase, no media palabra.
+    - `limpiar_markdown_respuesta` trabaja sobre texto, no sobre tokens: un
+      `**` puede llegar partido entre dos deltas.
+
+    Dos cosas que hay que respetar y que no son obvias:
+    - Si hay un `<think>` sin cerrar, no se emite nada todavía: el bloque se
+      limpia entero, y soltarlo a medias lo dejaría a la vista del usuario.
+    - El final de frase exige un espacio detrás. Sin eso, el punto de los
+      millares en "1.234,56 €" se toma por un final de frase y se emite
+      "Has gastado 1." como si fuera una respuesta completa.
+    """
+    if not final and "<think>" in buffer and "</think>" not in buffer:
+        return "", ya_emitido
+
+    limpio = limpiar_markdown_respuesta(limpiar_razonamiento(buffer))
+
+    if final:
+        if len(limpio) <= ya_emitido:
+            return "", ya_emitido
+        return limpio[ya_emitido:], len(limpio)
+
+    corte = 0
+    for m in re.finditer(r"[.!?…](?=\s)", limpio):
+        if m.end() > ya_emitido:
+            corte = m.end()
+
+    if corte <= ya_emitido:
+        return "", ya_emitido
+
+    return limpio[ya_emitido:corte], corte
+
+
+def _cantidad_de_args(raw) -> float:
+    """
+    Lee el importe que viene en los argumentos de un tool call.
+
+    El modelo puede mandar `null`, una cadena vacía o directamente texto. Todo
+    eso se trata como "no ha dicho el importe" (0.0), que es el caso que
+    `iniciar_bizum` resuelve preguntándoselo al usuario.
+    """
+    if raw is None or raw == "":
+        return 0.0
+    try:
+        return round(float(raw), 2)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def explicar_error(e: Exception) -> str:
     """
     Traduce una excepción a algo que el usuario pueda leer y accionar.
@@ -629,33 +684,67 @@ class Agente:
         await self.responder_directo(texto, emitir_inicio=False)
     
 
-    async def preparar_bizum_desde_backend(self, datos: dict) -> None:
-        destinatario_original = datos.get("destinatario", "").strip()
-        cantidad = round(float(datos.get("cantidad", 0)), 2)
-        concepto = datos.get("concepto", "").strip()
+    async def iniciar_bizum(
+        self,
+        destinatario_original: str,
+        cantidad: float,
+        concepto: str = "",
+        *,
+        registrar=None,
+        emitir_inicio: bool = True,
+    ) -> None:
+        """
+        Arranca un envío de Bizum: valida importe, resuelve el contacto y, si
+        todo cuadra, lo deja pendiente del PIN.
 
-        # El importe se comprueba lo primero, antes de validar el contacto y
-        # antes de pedir el PIN: si no cabe en los límites, no hay operación
-        # que confirmar.
+        Es el ÚNICO sitio donde vive este flujo. Antes estaba escrito dos veces
+        —aquí y en la rama del tool call de `_procesar`— y las dos copias ya
+        habían divergido: la del backend no comprobaba el importe en absoluto,
+        así que un envío de 2.000 € recorría todo el camino y solo fallaba
+        después de que el usuario tecleara su PIN.
+
+        `registrar` es la única diferencia real entre las dos vías. Cuando el
+        origen es un tool call del LLM, toda llamada a herramienta necesita su
+        `tool_result` en el historial antes de añadir nada más, o la API
+        rechaza la siguiente petición. Se le pasa una función que anota ese
+        resultado; desde el atajo del backend no hace falta y se omite.
+        """
+        def anotar(payload: dict) -> None:
+            if registrar is not None:
+                registrar(payload)
+
+        async def decir(texto: str) -> None:
+            await self.responder_directo(texto, emitir_inicio=emitir_inicio)
+
+        destinatario_original = (destinatario_original or "").strip()
+        concepto = (concepto or "").strip()
+
+        # El importe va primero, antes de resolver el contacto y antes de pedir
+        # el PIN: si no cabe en los límites no hay operación que confirmar, y
+        # pedir una clave para algo que se sabe que va a fallar es lo peor que
+        # puede hacer aquí.
         if cantidad <= 0:
-            await self.responder_directo(
-                f"¿Cuánto dinero quieres enviarle a {destinatario_original}?"
-            )
+            anotar({
+                "estado": "error",
+                "motivo": "Falta la cantidad. Se le ha preguntado al usuario.",
+            })
+            await decir(f"¿Cuánto dinero quieres enviarle a {destinatario_original}?")
             return
 
         error_importe = validar_importe_bizum(cantidad)
         if error_importe:
-            await self.responder_directo(error_importe)
+            anotar({"estado": "error", "motivo": error_importe})
+            await decir(error_importe)
             return
 
         validacion = buscar_contacto_bizum(destinatario_original)
 
         if validacion["estado"] == "no_encontrado":
-            texto = (
+            anotar({"estado": "no_encontrado", "destinatario": destinatario_original})
+            await decir(
                 f"No encuentro a “{destinatario_original}” como contacto de Bizum. "
                 "Revisa el nombre o usa un contacto con el que ya hayas hecho Bizum."
             )
-            await self.responder_directo(texto)
             return
 
         if validacion["estado"] == "sugerencia":
@@ -668,27 +757,43 @@ class Agente:
                 "concepto": concepto,
             }
 
-            texto = (
+            anotar({
+                "estado": "sugerencia_contacto",
+                "destinatario_original": destinatario_original,
+                "contacto_sugerido": contacto_sugerido,
+                "cantidad": cantidad,
+                "concepto": concepto,
+            })
+            await decir(
                 f"No encuentro exactamente “{destinatario_original}”. "
                 f"¿Querías decir {contacto_sugerido}?"
             )
-
-            await self.responder_directo(texto)
             return
 
         destinatario = validacion["contacto"]
-
         self.dejar_bizum_pendiente(destinatario, cantidad, concepto)
 
-        texto = (
+        anotar({
+            "estado": "pendiente_confirmacion",
+            "destinatario": destinatario,
+            "cantidad": cantidad,
+            "concepto": concepto,
+        })
+        await decir(
             f"Vas a enviar {formatear_euros(cantidad)} "
             f"a {destinatario}. Por favor, introduce tu PIN de seguridad para confirmar el envío."
         )
 
-        await self.responder_directo(texto)
-
-        # Le enviamos la señal al frontend para que despliegue el teclado numérico / modal de PIN
+        # Señal al frontend para que despliegue el teclado numérico del PIN.
         await self.emitir({"type": "pedir_pin"})
+
+    async def preparar_bizum_desde_backend(self, datos: dict) -> None:
+        """Atajo del backend: la petición viene de la regex, no del LLM."""
+        await self.iniciar_bizum(
+            datos.get("destinatario", ""),
+            round(float(datos.get("cantidad", 0)), 2),
+            datos.get("concepto", ""),
+        )
     
     
     async def procesar(self, mensaje_usuario: str) -> None:
@@ -784,6 +889,7 @@ class Agente:
 
                 tool_calls_locales = {}
                 texto_iteracion = ""
+                emitido = 0          # caracteres de esta iteración ya mostrados
 
                 async for chunk in stream:
                     if not chunk.choices:
@@ -791,11 +897,21 @@ class Agente:
 
                     delta = chunk.choices[0].delta
 
-                    # Importante:
-                    # NO emitimos texto todavía. Lo guardamos en buffer.
-                    # Solo se mostrará si al final no hay tool calls.
                     if delta.content:
                         texto_iteracion += delta.content
+
+                        # Se emite frase a frase según llega, en vez de esperar
+                        # al final de la iteración: el usuario empieza a leer y
+                        # a oír la respuesta varios segundos antes.
+                        #
+                        # Solo mientras no haya aparecido ningún tool call. Si
+                        # aparece después, lo mostrado se retira con
+                        # `descartar_texto` (abajo): responderán las tools, y
+                        # el texto previo del modelo no es la respuesta.
+                        if not tool_calls_locales:
+                            trozo, emitido = frases_emitibles(texto_iteracion, emitido)
+                            if trozo:
+                                await self.emitir({"type": "texto", "delta": trozo})
 
                     if delta.tool_calls:
                         for tool_call in delta.tool_calls:
@@ -826,7 +942,12 @@ class Agente:
                     if not tc["id"]:
                         tc["id"] = f"call_{idx}"
 
-                # Si no hay herramientas, ahora sí mostramos el texto del LLM.
+                # Si al final SÍ había herramientas, lo que se haya mostrado no
+                # era la respuesta: responderán las tools. Se retira.
+                if tool_calls_locales and emitido:
+                    await self.emitir({"type": "descartar_texto"})
+                    emitido = 0
+
                 if not tool_calls_locales:
                     texto_iteracion = limpiar_razonamiento(texto_iteracion)
                     texto_iteracion = limpiar_markdown_respuesta(texto_iteracion)
@@ -844,10 +965,17 @@ class Agente:
                             "Perdona, no he podido redactar la respuesta. "
                             "¿Puedes repetir la pregunta?"
                         )
+                        emitido = 0      # el fallback se muestra entero
 
                     self.historial.append({"role": "assistant", "content": texto_iteracion})
                     texto_final += texto_iteracion
-                    await self.emitir({"type": "texto", "delta": texto_iteracion})
+
+                    # Solo queda por mandar lo que no cerró frase (la última,
+                    # que a menudo no termina en punto). El resto ya se fue
+                    # emitiendo durante el stream.
+                    trozo, emitido = frases_emitibles(texto_iteracion, emitido, final=True)
+                    if trozo:
+                        await self.emitir({"type": "texto", "delta": trozo})
                     break
 
                 self.historial.append({
@@ -887,157 +1015,31 @@ class Agente:
                         continue
 
                     if tc["name"] == "enviar_bizum":
-                        destinatario = args.get("destinatario", "").strip()
-                        raw_cantidad = args.get("cantidad")
-                        try:
-                            # Protegemos frente a null, strings vacíos o textos
-                            if raw_cantidad is None or raw_cantidad == "":
-                                cantidad = 0.0
-                            else:
-                                cantidad = round(float(raw_cantidad), 2)
-                        except (ValueError, TypeError):
-                            cantidad = 0.0
-
-                        if cantidad <= 0:
-                            texto = f"¿Cuánto dinero quieres enviarle a {destinatario}?"
-                            
-                            # Registramos el fallo como respuesta de la herramienta para que 
-                            # el LLM entienda el contexto en el siguiente turno.
+                        # El mismo flujo que el atajo del backend, en un único
+                        # sitio (`iniciar_bizum`). Lo propio de esta vía es que
+                        # cada salida deja su `tool_result` en el historial:
+                        # sin él, la API rechaza la petición siguiente.
+                        def registrar(payload: dict, _tc=tc) -> None:
                             self.historial.append({
                                 "role": "tool",
-                                "tool_call_id": tc["id"],
-                                "name": tc["name"],
-                                "content": json.dumps({
-                                    "estado": "error",
-                                    "motivo": "Falta la cantidad. Se le ha preguntado al usuario."
-                                }, ensure_ascii=False),
-                            })
-                            
-                            await self.responder_directo(texto, emitir_inicio=False)
-                            return
-                        
-            
-
-                        # Mismo control que en la vía del backend: el importe
-                        # se rechaza aquí, no después de haber pedido el PIN.
-                        error_importe = validar_importe_bizum(cantidad)
-                        if error_importe:
-                            self.historial.append({
-                                "role": "tool",
-                                "tool_call_id": tc["id"],
-                                "name": tc["name"],
-                                "content": json.dumps({
-                                    "estado": "error",
-                                    "motivo": error_importe,
-                                }, ensure_ascii=False),
+                                "tool_call_id": _tc["id"],
+                                "name": _tc["name"],
+                                "content": json.dumps(payload, ensure_ascii=False),
                             })
 
-                            await self.responder_directo(
-                                error_importe,
-                                emitir_inicio=False,
-                            )
-                            return
-
-                        concepto = args.get("concepto", "").strip()
-
-                        validacion = buscar_contacto_bizum(destinatario)
-
-                        if validacion["estado"] == "no_encontrado":
-                            texto = (
-                                f"No encuentro a “{destinatario}” como contacto de Bizum. "
-                                "Revisa el nombre o usa un contacto con el que ya hayas hecho Bizum."
-                            )
-
-                            # Toda llamada de herramienta debe tener su resultado
-                            # antes de añadir una respuesta normal del asistente.
-                            self.historial.append({
-                                "role": "tool",
-                                "tool_call_id": tc["id"],
-                                "name": tc["name"],
-                                "content": json.dumps({
-                                    "estado": "no_encontrado",
-                                    "destinatario": destinatario,
-                                }, ensure_ascii=False),
-                            })
-
-                            await self.responder_directo(
-                                texto,
-                                emitir_inicio=False,
-                            )
-                            return
-
-                        if validacion["estado"] == "sugerencia":
-                            contacto_sugerido = validacion["contacto"]
-
-                            self.correccion_contacto_pendiente = {
-                                "destinatario_original": destinatario,
-                                "contacto_sugerido": contacto_sugerido,
-                                "cantidad": cantidad,
-                                "concepto": concepto,
-                            }
-
-                            texto = (
-                                f"No encuentro exactamente “{destinatario}”. "
-                                f"¿Querías decir {contacto_sugerido}?"
-                            )
-
-                            self.historial.append({
-                                "role": "tool",
-                                "tool_call_id": tc["id"],
-                                "name": tc["name"],
-                                "content": json.dumps({
-                                    "estado": "sugerencia_contacto",
-                                    "destinatario_original": destinatario,
-                                    "contacto_sugerido": contacto_sugerido,
-                                    "cantidad": cantidad,
-                                    "concepto": concepto,
-                                }, ensure_ascii=False),
-                            })
-
-                            await self.responder_directo(
-                                texto,
-                                emitir_inicio=False,
-                            )
-                            return
-
-                        destinatario = validacion["contacto"]
-
-                        self.dejar_bizum_pendiente(destinatario, cantidad, concepto)
-
-                        # Mismo texto que en el atajo rápido
-                        texto = (
-                            f"Vas a enviar {formatear_euros(cantidad)} "
-                            f"a {destinatario}. Por favor, introduce tu PIN de seguridad para confirmar el envío."
+                        await self.iniciar_bizum(
+                            args.get("destinatario", ""),
+                            _cantidad_de_args(args.get("cantidad")),
+                            args.get("concepto", ""),
+                            registrar=registrar,
+                            emitir_inicio=False,   # `inicio_respuesta` ya se emitió
                         )
-
-                        self.historial.append({
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "name": tc["name"],
-                            "content": json.dumps({
-                                "estado": "pendiente_confirmacion",
-                                "destinatario": destinatario,
-                                "cantidad": cantidad,
-                                "concepto": concepto,
-                            }, ensure_ascii=False),
-                        })
-
-                        await self.responder_directo(
-                            texto,
-                            emitir_inicio=False,
-                        )
-                        
-                        # NUEVO: Enviamos la señal al frontend para abrir el teclado
-                        await self.emitir({"type": "pedir_pin"})
-                        
                         return
-                    
-                    # AÑADE ESTO: Avisamos al frontend antes de ejecutar la tool
-                    await self.emitir({
-                        "type": "tool_inicio",
-                        "nombre": tc["name"]
-                    })
-                    
+
+                    # Avisamos al frontend antes de ejecutar la tool, para que
+                    # pueda mostrar en qué está trabajando el asistente.
+                    await self.emitir({"type": "tool_inicio", "nombre": tc["name"]})
+
 
                     salida = str(await ejecutar_tool(tc["name"], args, self.emitir))
 
