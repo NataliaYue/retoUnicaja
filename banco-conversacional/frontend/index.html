@@ -57,12 +57,57 @@
     font-family: inherit; font-size: 15px; outline: none;
   }
   .login-caja input:focus { border-color: var(--verde); }
+
+
+.login-caja::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    background-image: url("unicaja.png");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 40%;
+    opacity: 0.06;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+
+  #chat {
+    position: relative;
+    z-index: 1;
+  }
+  
+  #chat::before {
+    content: '';
+    position: fixed; /* Mantiene el logo fijo en el centro aunque hagas scroll */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    background-image: url("unicaja.png");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 35%; 
+    opacity: 0.04; /* Extra transparente para no estorbar la lectura */
+    z-index: -1;
+    pointer-events: none;
+  }
   /* ── Cabecera ─────────────────────────────────────────── */
   header{
     display:flex; align-items:center; justify-content:space-between; gap:12px;
     padding:14px 22px; background:var(--superficie); border-bottom:1px solid var(--linea);
   }
-  .marca{display:flex; align-items:baseline; gap:10px}
+  .marca {
+    display: flex; 
+    align-items: center; 
+    gap: 10px;
+  }
   .marca h1{font-family:'Fraunces',serif; font-weight:600; font-size:20px; margin:0; color:var(--verde)}
   .marca span{font-size:12px; color:var(--tinta-suave)}
   .saldo{
@@ -79,8 +124,39 @@
 
   .msg{max-width:86%; padding:12px 16px; border-radius:var(--radio); box-shadow:var(--sombra); white-space:pre-wrap}
   .msg.usuario{align-self:flex-end; background:var(--verde); color:#fff; border-bottom-right-radius:4px}
-  .msg.asistente{align-self:flex-start; background:var(--superficie); border-bottom-left-radius:4px}
-  .msg.asistente:empty::after{content:'●'; color:var(--verde); animation:parpadeo 1s infinite}
+  .msg.asistente {
+    align-self: flex-start; 
+    background: var(--superficie); 
+    border-bottom-left-radius: 4px;
+    position: relative;
+    margin-left: 42px; /* Dejamos hueco para el avatar */
+  }
+
+  /* Dibujamos el avatar automáticamente usando CSS ::before */
+  .msg.asistente::before {
+    content: '';
+    position: absolute;
+    left: -42px;
+    bottom: 0;
+    width: 32px;
+    height: 32px;
+    background-color: var(--verde-claro);
+    /* SVG de un pequeño asistente/bot en verde */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230E6B4F' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E");
+    background-size: 18px;
+    background-repeat: no-repeat;
+    background-position: center;
+    border-radius: 50%;
+    border: 1px solid var(--linea);
+    box-shadow: var(--sombra);
+  }
+
+  /* Ajustamos el indicador de parpadeo para que no pise el nuevo margen */
+  .msg.asistente:empty::after {
+    content: '●'; 
+    color: var(--verde); 
+    animation: parpadeo 1s infinite;
+  }
   @keyframes parpadeo{50%{opacity:.2}}
 
 /* Indicador de carga para las tools */
@@ -249,6 +325,9 @@
   }
   #btn-cancelar-pin:hover { color: var(--rojo); }
 
+
+
+
 </style>
 </head>
 <body>
@@ -275,8 +354,11 @@
 
 <header>
   <div class="marca">
-    <h1>Habla con tu dinero</h1>
-    <span>Reto IA · Unicaja &amp; UGR</span>
+    <img src="unicaja.png" height="50" alt="Unicaja Banco" style="margin-right: 12px;">
+    <div>
+      <h1>Habla con tu dinero</h1>
+      <span style="display: block; font-size: 12px; color: var(--tinta-suave);">Reto IA · Unicaja & UGR</span>
+    </div>
   </div>
   <div class="saldo" id="saldo"><small>Saldo disponible</small>—</div>
 </header>
@@ -352,6 +434,7 @@ let turnoActivo = false;   // hay un turno abierto (aún puede llegar más texto
 let habladoEnStreaming = false;  // ya se ha ido leyendo la respuesta por frases
 let ttsActivo = false;     // hablar las respuestas en voz alta
 let ultimaEntradaFueVoz = false;
+let bufferVoz = ''; // NUEVO: Acumula texto para hablar por frases
 
 /* ── 1. WebSocket ──────────────────────────────────────────────────── */
 let huboConexionPrevia = false;
@@ -465,12 +548,18 @@ function manejarEvento(ev){
         }
         burbujaActual.textContent += ev.delta;
       }
-      // TTS por frases: se habla cada trozo en cuanto llega, en vez de esperar
-      // a tener la respuesta entera. speechSynthesis encola sola las frases,
-      // así que se oyen seguidas.
+
       if (ttsActivo || ultimaEntradaFueVoz) {
-        hablar(ev.delta);
-        habladoEnStreaming = true;
+        bufferVoz += ev.delta;
+        // Cortamos por signos de puntuación fuertes seguidos de espacio
+        const match = bufferVoz.match(/([.?!:])\s/);
+        if (match) {
+          const corte = match.index + 1;
+          const frase = bufferVoz.substring(0, corte);
+          bufferVoz = bufferVoz.substring(corte).trimStart();
+          hablar(frase); // Habla esta frase mientras el LLM sigue generando la siguiente
+        }
+
       }
       bajar();
       break;
@@ -572,12 +661,34 @@ function manejarEvento(ev){
       tabla.appendChild(thead);
 
       const tbody = document.createElement('tbody');
-      for (const fila of ev.filas){
+      for (const fila of ev.filas) {
         const tr = document.createElement('tr');
-        for (const col of ev.columnas){
+        
+        for (let i = 0; i < ev.columnas.length; i++) {
+          const col = ev.columnas[i];
           const td = document.createElement('td');
-          td.textContent = formatearCelda(fila[col.campo], col.formato);
-          if (col.formato === 'euros' || col.formato === 'numero') td.className = col.formato;
+          
+          const valorBruto = fila[col.campo] ?? '';
+          const valorTexto = formatearCelda(valorBruto, col.formato);
+          
+          // Añade el logotipo o dibujo dinámico en la primera columna de texto
+          if (i === 0 && col.formato !== 'euros' && col.formato !== 'numero' && valorTexto) {
+            const dominio = String(valorTexto).toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+            const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(valorTexto)}&background=0E6B4F&color=fff&rounded=true`;
+            
+            td.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="https://logo.clearbit.com/${dominio}" 
+                     onerror="this.src='${fallback}'" 
+                     style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0;">
+                <span>${valorTexto}</span>
+              </div>
+            `;
+          } else {
+            td.textContent = valorTexto;
+            if (col.formato === 'euros' || col.formato === 'numero') td.className = col.formato;
+          }
+          
           tr.appendChild(td);
         }
         tbody.appendChild(tr);
@@ -610,10 +721,15 @@ function manejarEvento(ev){
     case 'fin_respuesta':
       turnoActivo = false;
       if (burbujaActual && !burbujaActual.textContent) burbujaActual.remove();
-      // Solo se lee la respuesta entera si NO se fue hablando por frases; si
-      // no, se oiría dos veces.
-      if (!habladoEnStreaming && ev.texto && (ttsActivo || ultimaEntradaFueVoz)) hablar(ev.texto);
-      habladoEnStreaming = false;
+
+      if (ttsActivo || ultimaEntradaFueVoz) {
+        if (bufferVoz.trim()) {
+          hablar(bufferVoz);
+        }
+      }
+      
+      bufferVoz = ''; // Limpiamos para el siguiente turno
+
       ultimaEntradaFueVoz = false;
       bajar();
       break;
