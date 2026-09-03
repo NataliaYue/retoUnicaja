@@ -4,7 +4,7 @@ import json
 import traceback
 import unicodedata
 from difflib import get_close_matches
-from openai import AsyncOpenAI
+from openai import APIConnectionError, AsyncOpenAI
 
 from .config import (
     BIZUM_MAX,
@@ -167,6 +167,25 @@ def validar_importe_bizum(cantidad: float) -> str | None:
     return None
 
 
+def explicar_error(e: Exception) -> str:
+    """
+    Traduce una excepción a algo que el usuario pueda leer y accionar.
+
+    El caso que importa es que el servidor del modelo no esté levantado: la
+    librería devuelve un escueto "Connection error." y en pantalla salía tal
+    cual, sin ninguna pista de qué hacer. Es el fallo más probable en una demo
+    —y el más desconcertante— porque todo lo demás sigue funcionando: la página
+    carga, el saldo se ve, y solo el chat deja de responder.
+    """
+    if isinstance(e, APIConnectionError):
+        return (
+            f"no puedo contactar con el modelo de lenguaje en {client.base_url}. "
+            "Comprueba que Ollama esté arrancado (./arrancar_ollama.sh) y vuelve a intentarlo."
+        )
+
+    return str(e)
+
+
 def limpiar_markdown_respuesta(texto: str) -> str:
     """
     Elimina Markdown básico que algunos modelos locales añaden aunque el prompt diga que no.
@@ -238,14 +257,16 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
             r"(?P<destinatario>.+?)$"
         ),
         
+        # Bizum de 20 euros para María
         (
-            r"(?:un\s+)?bizum\s+(?:de\s+)?(?P<cantidad>\d+"
+            r"^(?:un\s+)?bizum\s+(?:de\s+)?(?P<cantidad>\d+"
             r"(?:[,.]\d+)?)\s*(?:€|euros?)?\s+para\s+"
             r"(?P<destinatario>.+)"
         ),
         
-        (   
-            r"(?:p[aá]gale|pagar)\s+(?P<cantidad>\d+"
+        # Págale 15 euros a Ana por Bizum
+        (
+            r"^(?:p[aá]gale|pagar)\s+(?P<cantidad>\d+"
             r"(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
             r"(?P<destinatario>.+?)\s+(?:por\s+)?bizum"
         ),
@@ -1048,7 +1069,7 @@ class Agente:
                     })
 
         except Exception as e:
-            await self.emitir({"type": "error", "detalle": str(e)})
+            await self.emitir({"type": "error", "detalle": explicar_error(e)})
             await self.emitir({"type": "fin_respuesta", "texto": ""})
             return
 

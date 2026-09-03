@@ -655,22 +655,25 @@ if (Reconocedor) {
       enviar(texto);
     }
   };
-  rec.onend = () => btnMic.classList.remove('grabando');
+  rec.onend = () => {
+    btnMic.classList.remove('grabando');
 
-  const textoPendiente = input.value.trim();
-    
-  if (textoPendiente !== '') {
-    // Forzamos el estado de voz para que el asistente responda hablando
+    // El reconocimiento puede terminar sin haber emitido un resultado final
+    // (pasa al cortar por silencio): ahí el texto se queda en el input sin
+    // enviarse y la orden se pierde. `enviar()` vacía el input, así que si
+    // `onresult` ya lo mandó aquí no queda nada y no se duplica el envío.
+    const pendiente = input.value.trim();
+    if (!pendiente) return;
+
+    // El usuario ha hablado, así que se le responde hablando.
     if (!ttsActivo) {
       ttsActivo = true;
       btnTts.classList.add('activo');
     }
     ultimaEntradaFueVoz = true;
-    
-    // Enviamos el texto a la fuerza
-    enviar(textoPendiente);
-  }
-  
+    enviar(pendiente);
+  };
+
   rec.onerror = () => btnMic.classList.remove('grabando');
 } else {
   btnMic.title = 'Tu navegador no soporta reconocimiento de voz (prueba Chrome)';

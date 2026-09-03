@@ -7,12 +7,14 @@ Proyecto base para el **Reto IA de Unicaja & UGR** (Cátedra IA Responsable en F
 ## 1. Puesta en marcha (3 pasos)
 
 ```bash
-# 1) Dependencias
-pip install -r requirements.txt
+# 1) Modelo local (no hace falta ninguna clave de API)
+ollama pull qwen3:8b
+./arrancar_ollama.sh        # en otra terminal: arranca Ollama con contexto 8192
 
-# 2) Clave del LLM (Anthropic) y generación de datos ficticios
-cp .env.example .env        # → edita .env y pon tu ANTHROPIC_API_KEY
-python -m backend.seed      # crea banco.db con ~15 meses de movimientos
+# 2) Dependencias y datos ficticios
+pip install -r requirements.txt
+cp .env.example .env        # ya viene configurado para Ollama, no hay que tocarlo
+python -m backend.seed      # crea banco.db con 24 meses de movimientos
 
 # 3) Arrancar
 uvicorn backend.main:app --reload
@@ -34,7 +36,7 @@ Abre **http://localhost:8000** (Chrome recomendado: el reconocimiento de voz del
 ┌───────────────┴─────────────────── BACKEND (FastAPI) ───────────────────────────┐
 │                                                                                  │
 │   main.py ──▶ agent.py  «bucle agéntico»                                         │
-│               │   LLM (Claude) + historial de conversación + streaming           │
+│               │   LLM (qwen3:8b vía Ollama) + historial + streaming              │
 │               │                                                                  │
 │               ▼ tool calling (tools.py)                                          │
 │   ┌────────────────┬──────────────────┬─────────────────────┬────────────────┐  │
@@ -166,7 +168,7 @@ Cliente → servidor: `{"mensaje": "texto del usuario"}`.
 banco-conversacional/
 ├── README.md              ← este documento
 ├── requirements.txt
-├── .env.example           ← ANTHROPIC_API_KEY y modelo
+├── .env.example           ← proveedor (ollama) y modelo (qwen3:8b)
 ├── banco.db               ← se genera con: python -m backend.seed
 ├── backend/
 │   ├── config.py          ← modelo, esquema BD, system prompt (¡el cerebro se ajusta aquí!)

@@ -26,6 +26,7 @@ Arranque:  uvicorn backend.main:app --reload
 import asyncio
 import traceback
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -36,17 +37,29 @@ from .banking_api import api_consultar_saldo
 from .config import DB_PATH, TIMEOUT_WS_SEGUNDOS
 
 
-app = FastAPI(title="Habla con tu dinero — Reto Unicaja & UGR")
-
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend" / "index.html"
 
 
-@app.on_event("startup")
-def comprobar_bd():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Comprobaciones de arranque. Sustituye a `@app.on_event("startup")`, que
+    está deprecado en FastAPI.
+
+    Sin `banco.db` la aplicación arranca pero todas las consultas fallan, así
+    que es mejor no arrancar y decir cómo generarla.
+    """
     if not DB_PATH.exists():
         raise RuntimeError(
             "No existe banco.db. Genera los datos primero:  python -m backend.seed"
         )
+    yield
+
+
+app = FastAPI(
+    title="Habla con tu dinero — Reto Unicaja & UGR",
+    lifespan=lifespan,
+)
 
 
 @app.get("/")

@@ -124,9 +124,10 @@ Son los únicos puntos que dependen solo de ti, y no se improvisan el último d�
 - [ ] **Streaming percibido**: `agent.py` bufferiza todo el texto y lo emite al final de la
       iteración (para no mostrar texto previo a las tools). Emitir deltas en cuanto llegue texto
       y cortar/limpiar si aparece un tool call en el mismo turno.
-- [ ] **Indicador durante las tools**: evento `{"type": "tool_inicio", "nombre": ...}` antes de
-      `ejecutar_tool`, y spinner con estado en el frontend ("Consultando movimientos…"). Hoy solo
-      hay el punto parpadeante de la burbuja vacía.
+- [x] **Indicador durante las tools**: evento `tool_inicio` + spinner con estado en el frontend.
+      Medido: no cuesta latencia (3,1 s hasta la voz, igual que antes).
+      Ojo: **no se emite para el motor visual**, que va tras `fin_respuesta`. Es coherente —ahí el
+      usuario ya está oyendo la respuesta— pero conviene saberlo si algún día se echa en falta.
 - [ ] **TTS por frases**: trocear por puntuación y hablar cada frase según llega.
 
 ### Operaciones (10 pts)
@@ -153,15 +154,20 @@ Son los únicos puntos que dependen solo de ti, y no se improvisan el último d�
 - [x] `requirements.txt`: `anthropic` y `ollama` no se importan en ningún sitio, quitar.
       Ojo: `openai` SÍ es necesario aunque el proveedor sea Ollama — es el cliente del endpoint
       OpenAI-compatible (`http://localhost:11434/v1`).
-- [ ] `README.md` (ambos): siguen diciendo "pon tu ANTHROPIC_API_KEY". Actualizar a Ollama
-      (`ollama pull qwen3:8b`, `./arrancar_ollama.sh`). Es lo primero que ve quien clone el repo.
-- [ ] Migrar `@app.on_event("startup")` (`main.py`) a `lifespan` (deprecado en FastAPI).
-- [ ] Error visible en la UI si Ollama no está arrancado (hoy sale un error críptico).
-- [ ] **Código muerto** en `index.html`: un bloque dentro de `if (Reconocedor)` lee `input.value`
-      y hace `enviar()` en tiempo de carga de página, cuando el input siempre está vacío.
-      Parece que debía ir dentro de `rec.onend`.
-- [ ] **Móvil**: solo hay `<meta viewport>` y una regla de `prefers-reduced-motion`. Ningún
-      `@media` de ancho, así que no sabemos cómo se ve en pantalla estrecha.
+- [x] `README.md` (ambos): arranque actualizado a Ollama, sin claves de API, y "24 meses" en vez
+      de "~15". El de `banco-conversacional/` estaba entero sin tocar y además decía
+      "LLM (Claude)" en el diagrama de arquitectura.
+- [x] Migrar `@app.on_event("startup")` a `lifespan`. Verificado con `TestClient`: la comprobación
+      de que existe `banco.db` sigue ejecutándose al arrancar.
+- [x] Error visible en la UI si Ollama no está arrancado. `explicar_error()` en `agent.py` traduce
+      el `APIConnectionError` a *"no puedo contactar con el modelo en http://localhost:11434/v1,
+      comprueba que Ollama esté arrancado (./arrancar_ollama.sh)"*, en vez del escueto
+      "Connection error.". Es el fallo más probable y más desconcertante en una demo, porque todo
+      lo demás sigue funcionando: la página carga, el saldo se ve, y solo el chat deja de responder.
+- [x] **Código muerto** en `index.html`: nunca se ejecutaba, porque `input.value` está vacío al
+      cargar la página. Movido a `rec.onend`, donde sí sirve: si el reconocimiento de voz termina
+      sin resultado final —pasa al cortar por silencio— el texto se quedaba en el input y la orden
+      se perdía. No duplica envíos, porque `enviar()` vacía el input.
 
 ---
 
