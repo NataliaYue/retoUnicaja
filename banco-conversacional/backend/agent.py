@@ -270,12 +270,15 @@ def limpiar_markdown_respuesta(texto: str) -> str:
 
 def extraer_peticion_bizum(mensaje: str) -> dict | None:
     """
-    Detecta peticiones de Bizum con distintos órdenes naturales.
+    Detecta peticiones de Bizum con distintos órdenes naturales, permitiendo
+    cantidades opcionales y conceptos explícitos (ej. "con concepto cena").
 
     Ejemplos admitidos:
     - Haz un Bizum a María López de 20 euros
     - Envía 20 euros a María López por Bizum
-    - Envía 20 € por Bizum a María López
+    - Haz un bizum a María con concepto cena
+    - Págale 15 euros a Ana por Bizum para la cena
+    - Haz un bizum de 2 euros a Lucia G. con concepto papel
     """
     texto = mensaje.strip()
 
@@ -283,48 +286,83 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
         return None
 
     patrones = [
-        # Haz un Bizum a María López de 20 euros
+        # 1. Con cantidad antes o después y concepto explícito al final (soporta puntos en nombres como "Lucia G.")
+        (
+            r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
+            r"(?:un\s+)?bizum\s+"
+            r"(?:(?:de|por)\s+(?P<cantidad_ini>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+|\s+a\s+)?"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)"
+            r"(?:\s+(?:de|por)\s+(?P<cantidad_med>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?)?"
+            r"\s+(?:con\s+concepto|concepto|para|de|por)\s+(?P<concepto>.+)$"
+        ),
+
+        # 2. Haz un Bizum a María López de 20 euros con concepto cena (o para la cena)
         (
             r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
             r"(?:un\s+)?bizum\s+a\s+"
-            r"(?P<destinatario>.+?)\s+(?:de|por)\s+"
-            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?$"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)\s+(?:de|por)\s+"
+            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+"
+            r"(?:(?:para|de|por|con\s+concepto)\s+(?P<concepto>.+))?$"
         ),
-
-        # Envía 20 euros a María López por Bizum
+        
+        # 3. Envía 20 euros a María López por Bizum con concepto cena
         (
             r"^(?:envia|envía|manda|mandar)\s+"
             r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
-            r"(?P<destinatario>.+?)\s+(?:por\s+)?bizum$"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)\s+(?:por\s+)?bizum\s*"
+            r"(?:(?:para|de|por|con\s+concepto)\s+(?P<concepto>.+))?$"
         ),
 
-        # Envía 20 € por Bizum a María López
+        # 4. Sin cantidad pero con concepto explícito (ej: haz un bizum a María con concepto cena)
+        (
+            r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
+            r"(?:un\s+)?bizum\s+a\s+"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)\s+"
+            r"(?:con\s+concepto|para|de)\s+(?P<concepto>.+)$"
+        ),
+
+        # 5. Envía 20 euros a María López por Bizum (sin concepto)
+        (
+            r"^(?:envia|envía|manda|mandar)\s+"
+            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)\s+(?:por\s+)?bizum$"
+        ),
+
+        # 6. Envía 20 € por Bizum a María López
         (
             r"^(?:envia|envía|manda|mandar)\s+"
             r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+"
             r"(?:por\s+)?bizum\s+a\s+"
-            r"(?P<destinatario>.+?)$"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)$"
         ),
         
+        # 7. Haz un bizum de 20 euros a María López
         (
             r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
             r"(?:un\s+)?bizum\s+(?:de|por)\s+"
             r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
-            r"(?P<destinatario>.+?)$"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)$"
         ),
         
-        # Bizum de 20 euros para María
+        # 8. Bizum de 20 euros para María
         (
             r"^(?:un\s+)?bizum\s+(?:de\s+)?(?P<cantidad>\d+"
             r"(?:[,.]\d+)?)\s*(?:€|euros?)?\s+para\s+"
-            r"(?P<destinatario>.+)"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+)"
         ),
         
-        # Págale 15 euros a Ana por Bizum
+        # 9. Págale 15 euros a Ana por Bizum
         (
             r"^(?:p[aá]gale|pagar)\s+(?P<cantidad>\d+"
             r"(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
-            r"(?P<destinatario>.+?)\s+(?:por\s+)?bizum"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)\s+(?:por\s+)?bizum"
+        ),
+
+        # 10. Solo destinatario sin cantidad (ej: haz un bizum a María)
+        (
+            r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
+            r"(?:un\s+)?bizum\s+a\s+"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+)$"
         ),
     ]
 
@@ -334,22 +372,36 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
         if not match:
             continue
 
-        destinatario = match.group("destinatario").strip()
-        cantidad_txt = match.group("cantidad").replace(",", ".")
+        datos = match.groupdict()
+        destinatario = datos.get("destinatario", "").strip()
+        
+        # Eliminar una preposición "a" inicial sobrante (ej: "a María" -> "María")
+        destinatario = re.sub(r"^a\s+", "", destinatario, flags=re.IGNORECASE).strip()
 
-        try:
-            cantidad = round(float(cantidad_txt), 2)
-        except ValueError:
-            return None
+        # Limpiamos posibles restos de conectores al final del nombre del destinatario
+        destinatario = re.sub(r"\s+(?:de|por|con\s+concepto|concepto|para)$", "", destinatario, flags=re.IGNORECASE).strip()
+
+        # Capturar cantidad (puede venir en 'cantidad', 'cantidad_ini' o 'cantidad_med')
+        cantidad_txt = datos.get("cantidad") or datos.get("cantidad_ini") or datos.get("cantidad_med")
+        cantidad = 0.0
+        if cantidad_txt:
+            try:
+                cantidad = round(float(cantidad_txt.replace(",", ".")), 2)
+            except ValueError:
+                cantidad = 0.0
+
+        # Capturar concepto de forma segura
+        concepto = ""
+        if datos.get("concepto"):
+            concepto = datos["concepto"].strip()
 
         return {
             "destinatario": destinatario,
             "cantidad": cantidad,
-            "concepto": "",
+            "concepto": concepto,
         }
 
     return None
-
 
 def limpiar_razonamiento(texto: str) -> str:
     """
@@ -670,9 +722,12 @@ class Agente:
         salida = json.loads(salida_json)
 
         if salida.get("estado") == "ok":
+            concepto = salida.get("concepto")
+            # Añadimos el concepto al texto de respuesta si existe y no es vacío
+            txt_concepto = f" con concepto {concepto}" if concepto else ""
             texto = (
                 f"Bizum enviado correctamente a {salida['destinatario']} "
-                f"por {formatear_euros(salida['cantidad'])}. "
+                f"por {formatear_euros(salida['cantidad'])}{txt_concepto}. "
                 f"Tu nuevo saldo es {formatear_euros(salida['nuevo_saldo'])}."
             )
         else:
@@ -725,6 +780,11 @@ class Agente:
         # pedir una clave para algo que se sabe que va a fallar es lo peor que
         # puede hacer aquí.
         if cantidad <= 0:
+            self.bizum_pendiente = {
+                "destinatario": destinatario_original,
+                "cantidad": 0.0,
+                "concepto": concepto,
+            }
             anotar({
                 "estado": "error",
                 "motivo": "Falta la cantidad. Se le ha preguntado al usuario.",
@@ -798,8 +858,7 @@ class Agente:
             round(float(datos.get("cantidad", 0)), 2),
             datos.get("concepto", ""),
         )
-    
-    
+        
     async def procesar(self, mensaje_usuario: str) -> None:
         """
         Punto de entrada de un turno de conversación.
@@ -824,344 +883,280 @@ class Agente:
                            "Si estabas haciendo un Bizum, vuelve a pedírmelo: no se ha enviado nada.",
             })
             await self.emitir({"type": "fin_respuesta", "texto": ""})
-
-    async def _procesar(self, mensaje_usuario: str) -> None:
-        # Todos los mensajes entran en el historial,
-        # también los gestionados directamente por el backend.
-        self.asegurar_system_en_historial()
-        self.historial.append({
-            "role": "user",
-            "content": mensaje_usuario,
-        })
     
-        if await self.gestionar_correccion_contacto_pendiente(mensaje_usuario):
-            return
+    
+    async def _procesar(self, mensaje_usuario: str) -> None:
+            # Todos los mensajes entran en el historial,
+            # también los gestionados directamente por el backend.
+            self.asegurar_system_en_historial()
+            self.historial.append({
+                "role": "user",
+                "content": mensaje_usuario,
+            })
         
-        # Si hay un Bizum pendiente, este mensaje se interpreta como confirmación/cancelación.
-        if await self.gestionar_bizum_pendiente(mensaje_usuario):
-            return
-        peticion_bizum = extraer_peticion_bizum(mensaje_usuario)
-        
-        if peticion_bizum:
-            await self.preparar_bizum_desde_backend(peticion_bizum)
-            return
+            if await self.gestionar_correccion_contacto_pendiente(mensaje_usuario):
+                return
+            
+            # 1. PRIMERO comprobamos si estamos esperando la cantidad de un Bizum incompleto
+            if self.bizum_pendiente and self.bizum_pendiente.get("cantidad", 0.0) == 0.0:
+                match_cant = re.search(r"(\d+(?:[,.]\d+)?)", mensaje_usuario)
+                if match_cant:
+                    cantidad = round(float(match_cant.group(1).replace(",", ".")), 2)
+                    destinatario = self.bizum_pendiente["destinatario"]
+                    concepto = self.bizum_pendiente["concepto"]
+                    self.bizum_pendiente = None # Limpiamos el temporal
+                    
+                    # Reanudamos el flujo normal con la cantidad y el concepto conservados
+                    await self.iniciar_bizum(destinatario, cantidad, concepto)
+                    return
 
-        # Atajo rápido: consultar saldo no necesita pasar por el LLM.
-        if es_consulta_saldo(mensaje_usuario):
+            # 2. DESPUÉS gestionamos el Bizum pendiente real (esperando PIN o cancelación)
+            if await self.gestionar_bizum_pendiente(mensaje_usuario):
+                return
+
+            peticion_bizum = extraer_peticion_bizum(mensaje_usuario)
+            if peticion_bizum:
+                await self.preparar_bizum_desde_backend(peticion_bizum)
+                return
+
+            # Atajo rápido: consultar saldo no necesita pasar por el LLM.
+            if es_consulta_saldo(mensaje_usuario):
+                await self.emitir({"type": "inicio_respuesta"})
+
+                salida_json = await ejecutar_tool("consultar_saldo", {}, self.emitir)
+                salida = json.loads(salida_json)
+
+                if salida.get("estado") == "ok":
+                    texto = f"Tu saldo disponible es {formatear_euros(salida['saldo'])}."
+                else:
+                    texto = "No he podido consultar tu saldo ahora mismo."
+
+                await self.responder_directo(
+                    texto,
+                    emitir_inicio=False,
+                )
+                return
+            
             await self.emitir({"type": "inicio_respuesta"})
 
-            salida_json = await ejecutar_tool("consultar_saldo", {}, self.emitir)
-            salida = json.loads(salida_json)
+            texto_final = ""
+            reintento_vacio = False
 
-            if salida.get("estado") == "ok":
-                texto = f"Tu saldo disponible es {formatear_euros(salida['saldo'])}."
-            else:
-                texto = "No he podido consultar tu saldo ahora mismo."
+            ultimo_representable: tuple[str, dict] | None = None
+            visual_emitido = False
 
-            await self.responder_directo(
-                texto,
-                emitir_inicio=False,
-            )
-            return
-        
-        
+            try:
+                for _ in range(MAX_ITERACIONES_AGENTE):
+                    self.recortar_historial()
 
-        await self.emitir({"type": "inicio_respuesta"})
+                    stream = await client.chat.completions.create(
+                        model=MODELO,
+                        max_tokens=MAX_TOKENS,
+                        messages=self.historial,
+                        tools=OPENAI_TOOLS,
+                        stream=True,
+                        temperature=TEMPERATURA,
+                        extra_body=EXTRA_BODY,
+                    )
 
-        texto_final = ""
-        reintento_vacio = False
+                    tool_calls_locales = {}
+                    texto_iteracion = ""
+                    emitido = 0          
 
-        # Último resultado representable de este turno (de qué tool vino y qué
-        # devolvió), y si ya se ha mostrado algo. Con los dos, al acabar el bucle
-        # se sabe si hubo datos que se quedaron sin refuerzo visual.
-        ultimo_representable: tuple[str, dict] | None = None
-        visual_emitido = False
-
-        try:
-            for _ in range(MAX_ITERACIONES_AGENTE):
-                self.recortar_historial()
-
-                stream = await client.chat.completions.create(
-                    model=MODELO,
-                    max_tokens=MAX_TOKENS,
-                    messages=self.historial,
-                    tools=OPENAI_TOOLS,
-                    stream=True,
-                    temperature=TEMPERATURA,
-                    extra_body=EXTRA_BODY,
-                )
-
-                tool_calls_locales = {}
-                texto_iteracion = ""
-                emitido = 0          # caracteres de esta iteración ya mostrados
-
-                async for chunk in stream:
-                    if not chunk.choices:
-                        continue
-
-                    delta = chunk.choices[0].delta
-
-                    if delta.content:
-                        texto_iteracion += delta.content
-
-                        # Se emite frase a frase según llega, en vez de esperar
-                        # al final de la iteración: el usuario empieza a leer y
-                        # a oír la respuesta varios segundos antes.
-                        #
-                        # Solo mientras no haya aparecido ningún tool call. Si
-                        # aparece después, lo mostrado se retira con
-                        # `descartar_texto` (abajo): responderán las tools, y
-                        # el texto previo del modelo no es la respuesta.
-                        if not tool_calls_locales:
-                            trozo, emitido = frases_emitibles(texto_iteracion, emitido)
-                            if trozo:
-                                await self.emitir({"type": "texto", "delta": trozo})
-
-                    if delta.tool_calls:
-                        for tool_call in delta.tool_calls:
-                            idx = tool_call.index
-
-                            if idx not in tool_calls_locales:
-                                tool_calls_locales[idx] = {"id": None, "name": None, "arguments": ""}
-
-                            # id y name pueden llegar en cualquier chunk (o solo en
-                            # el primero); se guardan en cuanto aparezcan y nunca
-                            # se machacan con None.
-                            tc_local = tool_calls_locales[idx]
-                            if tool_call.id:
-                                tc_local["id"] = tool_call.id
-                            if tool_call.function:
-                                if tool_call.function.name:
-                                    tc_local["name"] = tool_call.function.name
-                                if tool_call.function.arguments:
-                                    tc_local["arguments"] += tool_call.function.arguments
-
-                # Saneado post-stream: sin name no hay nada que ejecutar (se
-                # descarta el tool call incompleto); sin id, se genera uno
-                # sintético para que el historial siga siendo válido.
-                tool_calls_locales = {
-                    idx: tc for idx, tc in tool_calls_locales.items() if tc["name"]
-                }
-                for idx, tc in tool_calls_locales.items():
-                    if not tc["id"]:
-                        tc["id"] = f"call_{idx}"
-
-                # Si al final SÍ había herramientas, lo que se haya mostrado no
-                # era la respuesta: responderán las tools. Se retira.
-                if tool_calls_locales and emitido:
-                    await self.emitir({"type": "descartar_texto"})
-                    emitido = 0
-
-                if not tool_calls_locales:
-                    texto_iteracion = limpiar_razonamiento(texto_iteracion)
-                    texto_iteracion = limpiar_markdown_respuesta(texto_iteracion)
-
-                    # A veces qwen3 devuelve una iteración vacía (sin texto ni
-                    # tools), sobre todo tras un tool_result. No se guarda en el
-                    # historial: un content nulo hace que Ollama rechace TODAS
-                    # las peticiones siguientes con 400 "invalid message content
-                    # type: <nil>". Se reintenta una vez; si persiste, fallback.
-                    if not texto_iteracion.strip():
-                        if not reintento_vacio:
-                            reintento_vacio = True
+                    async for chunk in stream:
+                        if not chunk.choices:
                             continue
-                        texto_iteracion = (
-                            "Perdona, no he podido redactar la respuesta. "
-                            "¿Puedes repetir la pregunta?"
-                        )
-                        emitido = 0      # el fallback se muestra entero
 
-                    self.historial.append({"role": "assistant", "content": texto_iteracion})
-                    texto_final += texto_iteracion
+                        delta = chunk.choices[0].delta
 
-                    # Solo queda por mandar lo que no cerró frase (la última,
-                    # que a menudo no termina en punto). El resto ya se fue
-                    # emitiendo durante el stream.
-                    trozo, emitido = frases_emitibles(texto_iteracion, emitido, final=True)
-                    if trozo:
-                        await self.emitir({"type": "texto", "delta": trozo})
-                    break
+                        if delta.content:
+                            texto_iteracion += delta.content
 
-                self.historial.append({
-                    "role": "assistant",
-                    # nunca None: Ollama rechaza mensajes con content nulo
-                    "content": texto_iteracion,
-                    "tool_calls": [
-                        {
-                            "id": tc["id"],
-                            "type": "function",
-                            "function": {
+                            if not tool_calls_locales:
+                                trozo, emitido = frases_emitibles(texto_iteracion, emitido)
+                                if trozo:
+                                    await self.emitir({"type": "texto", "delta": trozo})
+
+                        if delta.tool_calls:
+                            for tool_call in delta.tool_calls:
+                                idx = tool_call.index
+
+                                if idx not in tool_calls_locales:
+                                    tool_calls_locales[idx] = {"id": None, "name": None, "arguments": ""}
+
+                                tc_local = tool_calls_locales[idx]
+                                if tool_call.id:
+                                    tc_local["id"] = tool_call.id
+                                if tool_call.function:
+                                    if tool_call.function.name:
+                                        tc_local["name"] = tool_call.function.name
+                                    if tool_call.function.arguments:
+                                        tc_local["arguments"] += tool_call.function.arguments
+
+                    tool_calls_locales = {
+                        idx: tc for idx, tc in tool_calls_locales.items() if tc["name"]
+                    }
+                    for idx, tc in tool_calls_locales.items():
+                        if not tc["id"]:
+                            tc["id"] = f"call_{idx}"
+
+                    if tool_calls_locales and emitido:
+                        await self.emitir({"type": "descartar_texto"})
+                        emitido = 0
+
+                    if not tool_calls_locales:
+                        texto_iteracion = limpiar_razonamiento(texto_iteracion)
+                        texto_iteracion = limpiar_markdown_respuesta(texto_iteracion)
+
+                        if not texto_iteracion.strip():
+                            if not reintento_vacio:
+                                reintento_vacio = True
+                                continue
+                            texto_iteracion = (
+                                "Perdona, no he podido redactar la respuesta. "
+                                "¿Puedes repetir la pregunta?"
+                            )
+                            emitido = 0      
+
+                        self.historial.append({"role": "assistant", "content": texto_iteracion})
+                        texto_final += texto_iteracion
+
+                        trozo, emitido = frases_emitibles(texto_iteracion, emitido, final=True)
+                        if trozo:
+                            await self.emitir({"type": "texto", "delta": trozo})
+                        break
+
+                    self.historial.append({
+                        "role": "assistant",
+                        "content": texto_iteracion,
+                        "tool_calls": [
+                            {
+                                "id": tc["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tc["name"],
+                                    "arguments": tc["arguments"],
+                                },
+                            }
+                            for tc in tool_calls_locales.values()
+                        ],
+                    })
+
+                    respondidos: set[str] = set()
+
+                    for tc in tool_calls_locales.values():
+                        try:
+                            args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                        except json.JSONDecodeError as e:
+                            self.historial.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
                                 "name": tc["name"],
-                                "arguments": tc["arguments"],
-                            },
-                        }
-                        for tc in tool_calls_locales.values()
-                    ],
-                })
+                                "content": json.dumps({
+                                    "error": f"Los argumentos no son JSON válido: {e}. Reintenta la llamada."
+                                }, ensure_ascii=False),
+                            })
+                            respondidos.add(tc["id"])
+                            continue
 
-                # Si hay herramientas, NO mostramos texto_iteracion.
-                # Responderán las tools o el backend controlado.
-                #
-                # El mensaje `assistant` de arriba ya declara TODOS los tool
-                # calls de esta tanda, así que a partir de aquí cada uno debe
-                # dejar su `tool_result` sí o sí. Se lleva la cuenta para poder
-                # cerrar los que queden si el turno se corta por el camino.
-                respondidos: set[str] = set()
+                        if tc["name"] == "enviar_bizum":
+                            def registrar(payload: dict, _tc=tc) -> None:
+                                self.historial.append({
+                                    "role": "tool",
+                                    "tool_call_id": _tc["id"],
+                                    "name": _tc["name"],
+                                    "content": json.dumps(payload, ensure_ascii=False),
+                                })
+                                respondidos.add(_tc["id"])
 
-                for tc in tool_calls_locales.values():
-                    try:
-                        args = json.loads(tc["arguments"]) if tc["arguments"] else {}
-                    except json.JSONDecodeError as e:
-                        # JSON corrupto (p.ej. spec truncada): se devuelve el error
-                        # al modelo como tool_result para que se autocorrija,
-                        # igual que se hace con los errores de SQL.
+                            await self.iniciar_bizum(
+                                args.get("destinatario", ""),
+                                _cantidad_de_args(args.get("cantidad")),
+                                args.get("concepto", ""),
+                                registrar=registrar,
+                                emitir_inicio=False,   
+                            )
+
+                            for pendiente in tool_calls_locales.values():
+                                if pendiente["id"] in respondidos:
+                                    continue
+                                self.historial.append({
+                                    "role": "tool",
+                                    "tool_call_id": pendiente["id"],
+                                    "name": pendiente["name"],
+                                    "content": json.dumps({
+                                        "estado": "no_ejecutada",
+                                        "motivo": "Hay un envío de Bizum en curso pendiente "
+                                                "del PIN. Esta herramienta no se ha ejecutado; "
+                                                "vuelve a pedirla si sigue haciendo falta.",
+                                    }, ensure_ascii=False),
+                                })
+                            return
+
+                        await self.emitir({"type": "tool_inicio", "nombre": tc["name"]})
+
+                        salida = str(await ejecutar_tool(tc["name"], args, self.emitir))
+
+                        if tc["name"] in ("consultar_movimientos", "analizar_suscripciones"):
+                            try:
+                                ultimo_representable = (tc["name"], json.loads(salida))
+                            except json.JSONDecodeError:
+                                ultimo_representable = None
+                        elif tc["name"] in ("mostrar_grafico", "mostrar_tabla"):
+                            visual_emitido = '"estado": "ok"' in salida
+
+                        if len(salida) > MAX_CHARS_TOOL_RESULT:
+                            salida = (
+                                salida[:MAX_CHARS_TOOL_RESULT]
+                                + " …[resultado recortado: pide menos columnas o agrega los datos]"
+                            )
+
                         self.historial.append({
                             "role": "tool",
                             "tool_call_id": tc["id"],
                             "name": tc["name"],
-                            "content": json.dumps({
-                                "error": f"Los argumentos no son JSON válido: {e}. Reintenta la llamada."
-                            }, ensure_ascii=False),
+                            "content": salida,
                         })
                         respondidos.add(tc["id"])
-                        continue
 
-                    if tc["name"] == "enviar_bizum":
-                        # El mismo flujo que el atajo del backend, en un único
-                        # sitio (`iniciar_bizum`). Lo propio de esta vía es que
-                        # cada salida deja su `tool_result` en el historial:
-                        # sin él, la API rechaza la petición siguiente.
-                        def registrar(payload: dict, _tc=tc) -> None:
-                            self.historial.append({
-                                "role": "tool",
-                                "tool_call_id": _tc["id"],
-                                "name": _tc["name"],
-                                "content": json.dumps(payload, ensure_ascii=False),
-                            })
-                            respondidos.add(_tc["id"])
+            except Exception as e:
+                await self.emitir({"type": "error", "detalle": explicar_error(e)})
+                await self.emitir({"type": "fin_respuesta", "texto": ""})
+                return
 
-                        await self.iniciar_bizum(
-                            args.get("destinatario", ""),
-                            _cantidad_de_args(args.get("cantidad")),
-                            args.get("concepto", ""),
-                            registrar=registrar,
-                            emitir_inicio=False,   # `inicio_respuesta` ya se emitió
-                        )
-
-                        # El Bizum se queda el turno: ya ha respondido y puede
-                        # haber pedido el PIN, así que no se sigue iterando ni
-                        # se ejecuta nada más. Pero salir sin cerrar el resto de
-                        # tool calls de esta MISMA tanda deja el historial roto:
-                        # un `assistant` con N tool_calls y menos de N respuestas
-                        # hace que la API rechace la petición SIGUIENTE con un
-                        # 400, así que el usuario perdería el turno de después
-                        # —justo cuando viene a teclear el PIN—.
-                        for pendiente in tool_calls_locales.values():
-                            if pendiente["id"] in respondidos:
-                                continue
-                            self.historial.append({
-                                "role": "tool",
-                                "tool_call_id": pendiente["id"],
-                                "name": pendiente["name"],
-                                "content": json.dumps({
-                                    "estado": "no_ejecutada",
-                                    "motivo": "Hay un envío de Bizum en curso pendiente "
-                                              "del PIN. Esta herramienta no se ha ejecutado; "
-                                              "vuelve a pedirla si sigue haciendo falta.",
-                                }, ensure_ascii=False),
-                            })
-                        return
-
-                    # Avisamos al frontend antes de ejecutar la tool, para que
-                    # pueda mostrar en qué está trabajando el asistente.
-                    await self.emitir({"type": "tool_inicio", "nombre": tc["name"]})
-
-
-                    salida = str(await ejecutar_tool(tc["name"], args, self.emitir))
-
-                    # Se anota lo justo para decidir el visual al cerrar el turno.
-                    if tc["name"] in ("consultar_movimientos", "analizar_suscripciones"):
-                        try:
-                            ultimo_representable = (tc["name"], json.loads(salida))
-                        except json.JSONDecodeError:
-                            ultimo_representable = None
-                    elif tc["name"] in ("mostrar_grafico", "mostrar_tabla"):
-                        # Solo cuenta si de verdad se mostró: una spec rechazada
-                        # devuelve {"error": ...} y ahí el visual sigue faltando.
-                        visual_emitido = '"estado": "ok"' in salida
-
-                    # Válvula de seguridad: un resultado enorme se comería el
-                    # contexto entero. El tope de filas ya está en database.py;
-                    # esto cubre el caso de filas muy anchas.
-                    if len(salida) > MAX_CHARS_TOOL_RESULT:
-                        salida = (
-                            salida[:MAX_CHARS_TOOL_RESULT]
-                            + " …[resultado recortado: pide menos columnas o agrega los datos]"
-                        )
-
-                    self.historial.append({
-                        "role": "tool",
-                        "tool_call_id": tc["id"],
-                        "name": tc["name"],
-                        "content": salida,
-                    })
-                    respondidos.add(tc["id"])
-
-        except Exception as e:
-            await self.emitir({"type": "error", "detalle": explicar_error(e)})
-            await self.emitir({"type": "fin_respuesta", "texto": ""})
-            return
-
-        # Bucle agotado sin respuesta final (todas las iteraciones acabaron en
-        # tool calls): mejor un mensaje honesto que una burbuja vacía.
-        if not texto_final.strip():
-            texto_final = (
-                "No he conseguido completar la respuesta. "
-                "¿Puedes reformular la pregunta?"
-            )
-            self.historial.append({"role": "assistant", "content": texto_final})
-            await self.emitir({"type": "texto", "delta": texto_final})
-
-        await self.emitir({"type": "fin_respuesta", "texto": texto_final.strip()})
-
-        # Red de seguridad del motor visual: si el turno trajo datos graficables
-        # y el agente no pintó nada, se pide la spec en una llamada dedicada.
-        #
-        # Va DESPUÉS de `fin_respuesta` a propósito. Ese evento es el que dispara
-        # el TTS en el frontend, así que ponerlo antes retrasaría la respuesta
-        # hablada los ~7 s que tarda la llamada, que es exactamente la
-        # penalización de agilidad por la que ya se revirtió el intento
-        # anterior. Así el usuario oye la respuesta de inmediato y la tabla o
-        # el gráfico aparecen mientras la escucha.
-        if not visual_emitido and ultimo_representable:
-            nombre_tool, resultado = ultimo_representable
-            columnas, filas = normalizar(nombre_tool, resultado)
-
-            if filas:
-                # Aviso de que viene algo. Sin esto, el usuario lee la respuesta,
-                # se queda unos segundos sin nada, y de pronto aparece una tabla:
-                # no sabía si iba a pasar algo o si el turno había terminado.
-                # `tool_inicio` no cubre este tramo, porque va por otra vía.
-                await self.emitir({"type": "visual_generando"})
-
-            tipo, payload, razonamiento = await generar_visual(
-                client, MODELO, mensaje_usuario, columnas, filas,
-                extra_body=EXTRA_BODY,
-            )
-
-            if tipo == "grafico" and payload:
-                await ejecutar_tool(
-                    "mostrar_grafico",
-                    {"spec": payload, "razonamiento": razonamiento},
-                    self.emitir,
+            if not texto_final.strip():
+                texto_final = (
+                    "No he conseguido completar la respuesta. "
+                    "¿Puedes reformular la pregunta?"
                 )
-            elif tipo == "tabla" and payload:
-                await ejecutar_tool(
-                    "mostrar_tabla",
-                    {**payload, "razonamiento": razonamiento},
-                    self.emitir,
+                self.historial.append({"role": "assistant", "content": texto_final})
+                await self.emitir({"type": "texto", "delta": texto_final})
+
+            await self.emitir({"type": "fin_respuesta", "texto": texto_final.strip()})
+
+            if not visual_emitido and ultimo_representable:
+                nombre_tool, resultado = ultimo_representable
+                columnas, filas = normalizar(nombre_tool, resultado)
+
+                if filas:
+                    await self.emitir({"type": "visual_generando"})
+
+                tipo, payload, razonamiento = await generar_visual(
+                    client, MODELO, mensaje_usuario, columnas, filas,
+                    extra_body=EXTRA_BODY,
                 )
-            elif filas:
-                # No salió nada pintable: hay que retirar el aviso o se queda
-                # girando para siempre.
-                await self.emitir({"type": "visual_cancelado"})
+
+                if tipo == "grafico" and payload:
+                    await ejecutar_tool(
+                        "mostrar_grafico",
+                        {"spec": payload, "razonamiento": razonamiento},
+                        self.emitir,
+                    )
+                elif tipo == "tabla" and payload:
+                    await ejecutar_tool(
+                        "mostrar_tabla",
+                        {**payload, "razonamiento": razonamiento},
+                        self.emitir,
+                    )
+                elif filas:
+                    await self.emitir({"type": "visual_cancelado"})

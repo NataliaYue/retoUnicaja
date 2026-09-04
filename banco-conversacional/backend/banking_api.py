@@ -110,6 +110,6 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
         "estado": "ok",
         "destinatario": destinatario.strip(),
         "cantidad": cantidad,
-        "concepto": concepto or None,
+        "concepto": concepto.strip() if concepto and concepto.strip() else "Envío instantáneo",
         "nuevo_saldo": nuevo_saldo,
     }

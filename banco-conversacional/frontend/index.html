@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Habla con tu dinero</title>
 
-<!-- Vega-Lite: renderiza las especificaciones de gráfico que genera el LLM -->
 <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
 <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
 <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
@@ -25,15 +24,20 @@
     --linea:#DDE4DE;
     --radio:14px;
     --sombra:0 1px 2px rgba(23,33,27,.06), 0 8px 24px rgba(23,33,27,.05);
+    --tamano-base: 15px;      /* Variable dinámica para el tamaño de fuente */
   }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{
     margin:0; background:var(--fondo); color:var(--tinta);
-    font-family:'Manrope',system-ui,sans-serif; font-size:15px; line-height:1.55;
+    font-family:'Manrope',system-ui,sans-serif; font-size:var(--tamano-base); line-height:1.55;
     display:flex; flex-direction:column;
   }
 /* ── Pantalla de Login ───────────────────────────────── */
+#menu-color-login.oculto {
+  display: none !important;
+}
+
   #login-pantalla {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background-color: var(--fondo);
@@ -58,25 +62,6 @@
   }
   .login-caja input:focus { border-color: var(--verde); }
 
-
-.login-caja::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 100%;
-    height: 100%;
-    background-image: url("unicaja.png");
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 40%;
-    opacity: 0.06;
-    z-index: -1;
-    pointer-events: none;
-  }
-
-
   #chat {
     position: relative;
     z-index: 1;
@@ -84,7 +69,7 @@
   
   #chat::before {
     content: '';
-    position: fixed; /* Mantiene el logo fijo en el centro aunque hagas scroll */
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -94,7 +79,7 @@
     background-repeat: no-repeat;
     background-position: center;
     background-size: 35%; 
-    opacity: 0.04; /* Extra transparente para no estorbar la lectura */
+    opacity: 0.04;
     z-index: -1;
     pointer-events: none;
   }
@@ -110,6 +95,34 @@
   }
   .marca h1{font-family:'Fraunces',serif; font-weight:600; font-size:20px; margin:0; color:var(--verde)}
   .marca span{font-size:12px; color:var(--tinta-suave)}
+  
+  .acciones-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+.btn-config {
+    background: var(--fondo);
+    color: var(--tinta); 
+    border: 1px solid var(--linea);
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .btn-config:hover {
+    background: var(--verde-claro);
+    border-color: var(--verde);
+  }
+
+
+
+
   .saldo{
     font-variant-numeric:tabular-nums; font-weight:800; font-size:16px;
     background:var(--verde-claro); color:var(--verde);
@@ -129,10 +142,9 @@
     background: var(--superficie); 
     border-bottom-left-radius: 4px;
     position: relative;
-    margin-left: 42px; /* Dejamos hueco para el avatar */
+    margin-left: 42px;
   }
 
-  /* Dibujamos el avatar automáticamente usando CSS ::before */
   .msg.asistente::before {
     content: '';
     position: absolute;
@@ -141,7 +153,6 @@
     width: 32px;
     height: 32px;
     background-color: var(--verde-claro);
-    /* SVG de un pequeño asistente/bot en verde */
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230E6B4F' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E");
     background-size: 18px;
     background-repeat: no-repeat;
@@ -151,7 +162,6 @@
     box-shadow: var(--sombra);
   }
 
-  /* Ajustamos el indicador de parpadeo para que no pise el nuevo margen */
   .msg.asistente:empty::after {
     content: '●'; 
     color: var(--verde); 
@@ -159,7 +169,6 @@
   }
   @keyframes parpadeo{50%{opacity:.2}}
 
-/* Indicador de carga para las tools */
   .spinner {
     display: inline-block;
     width: 14px; height: 14px;
@@ -176,25 +185,16 @@
     color: var(--tinta-suave);
     background: transparent;
     box-shadow: none;
-    font-size: 13.5px;
+    font-size: 0.9em;
     display: flex;
     align-items: center;
   }
 
-
-
-
-
-
-
-
-
   .bloque-asistente{align-self:flex-start; max-width:92%; display:flex; flex-direction:column; gap:10px}
 
-  /* Chip de SQL (transparencia del text-to-SQL) */
   details.sql{
     background:var(--superficie); border:1px solid var(--linea); border-radius:10px;
-    font-size:12.5px; overflow:hidden;
+    font-size:0.85em; overflow:hidden;
   }
   details.sql summary{
     cursor:pointer; padding:8px 12px; color:var(--tinta-suave); font-weight:600;
@@ -203,11 +203,10 @@
   details.sql summary::before{content:'⌕'; color:var(--verde); font-size:14px}
   details.sql pre{
     margin:0; padding:10px 12px; background:#111A15; color:#CFE8DC;
-    font-family:ui-monospace,monospace; font-size:12px; overflow-x:auto;
+    font-family:ui-monospace,monospace; font-size:0.9em; overflow-x:auto;
   }
   details.sql.con-error summary{color:var(--rojo)}
 
-  /* Tarjeta de gráfico generada por la IA */
   .tarjeta-grafico{
     background:var(--superficie); border:1px solid var(--linea); border-radius:var(--radio);
     box-shadow:var(--sombra); padding:14px; width:min(640px, 100%);
@@ -215,57 +214,47 @@
   .tarjeta-grafico .vega{width:100%; overflow-x:auto}
   .tarjeta-grafico .porque{
     margin-top:8px; padding-top:8px; border-top:1px dashed var(--linea);
-    font-size:12.5px; color:var(--tinta-suave);
+    font-size:0.85em; color:var(--tinta-suave);
   }
   .tarjeta-grafico .porque b{color:var(--verde)}
 
-  /* Aviso de que se está preparando una tabla o un gráfico. Ocupa el mismo
-     sitio y tiene la misma forma que la tarjeta final, para que al llegar el
-     resultado se sustituya sin dar un salto en la conversación. */
   .tarjeta-generando{
     background:var(--superficie); border:1px dashed var(--linea);
     border-radius:var(--radio); padding:18px 14px; width:min(640px, 100%);
     display:flex; align-items:center; gap:10px;
-    color:var(--tinta-suave); font-size:13.5px;
+    color:var(--tinta-suave); font-size:0.9em;
   }
 
-  /* Tablas: la otra mitad de la Generative UI. Misma tarjeta que el gráfico
-     para que se lean como dos formas de lo mismo, no como dos componentes. */
   .tarjeta-grafico .tabla-scroll{width:100%; overflow-x:auto}
-  .tabla-datos{border-collapse:collapse; width:100%; font-size:13.5px}
+  .tabla-datos{border-collapse:collapse; width:100%; font-size:0.9em}
   .tabla-datos caption{
     text-align:left; font-weight:700; color:var(--tinta);
-    padding-bottom:10px; font-size:14.5px;
+    padding-bottom:10px; font-size:1em;
   }
   .tabla-datos th,.tabla-datos td{
     padding:7px 10px; text-align:left; border-bottom:1px solid var(--linea);
     white-space:nowrap;
   }
   .tabla-datos th{
-    color:var(--tinta-suave); font-weight:600; font-size:12px;
+    color:var(--tinta-suave); font-weight:600; font-size:0.8em;
     text-transform:uppercase; letter-spacing:.4px;
     border-bottom:1px solid var(--tinta-suave);
   }
-  /* Los importes se leen comparando, así que van alineados a la derecha y en
-     cifras tabulares: si no, los millares bailan de fila en fila. */
   .tabla-datos .num{text-align:right; font-variant-numeric:tabular-nums}
   .tabla-datos .euros{text-align:right; font-variant-numeric:tabular-nums; font-weight:600}
   .tabla-datos tbody tr:last-child td{border-bottom:none}
   .tabla-datos tbody tr:hover{background:var(--verde-claro)}
 
-  /* Sugerencias iniciales */
   .sugerencias{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:8px}
   .sugerencias button{
     background:var(--superficie); border:1px solid var(--linea); border-radius:999px;
-    padding:8px 14px; font:inherit; font-size:13px; cursor:pointer; color:var(--tinta);
+    padding:8px 14px; font:inherit; font-size:0.9em; cursor:pointer; color:var(--tinta);
   }
   .sugerencias button:hover{border-color:var(--verde); color:var(--verde)}
 
-  .aviso-error{align-self:center; color:var(--rojo); font-size:13px; background:#FBEDE9; padding:8px 14px; border-radius:10px}
-  .aviso-error.oculto {
-    display: none;
-  }
-  .aviso-sesion{align-self:center; color:var(--tinta-suave); font-size:13px; background:var(--verde-claro); padding:8px 14px; border-radius:10px; text-align:center}
+  .aviso-error{align-self:center; color:var(--rojo); font-size:0.9em; background:#FBEDE9; padding:8px 14px; border-radius:10px}
+  .aviso-error.oculto { display: none; }
+  .aviso-sesion{align-self:center; color:var(--tinta-suave); font-size:0.9em; background:var(--verde-claro); padding:8px 14px; border-radius:10px; text-align:center}
 
   /* ── Barra de entrada ─────────────────────────────────── */
   footer{padding:12px 18px 18px; background:linear-gradient(transparent, var(--fondo) 40%)}
@@ -274,7 +263,13 @@
     background:var(--superficie); border:1px solid var(--linea); border-radius:999px;
     padding:6px 6px 6px 18px; box-shadow:var(--sombra);
   }
-  .entrada input{flex:1; border:none; outline:none; font:inherit; background:transparent; min-width:0}
+  .entrada input{
+    flex:1; border:none; outline:none; font:inherit; background:transparent; min-width:0;
+    color: var(--tinta); /* Asegura que el texto escrito use el color de tinta actual */
+  }
+  .entrada input::placeholder{
+    color: var(--tinta-suave); /* Adapta también el texto de ayuda (placeholder) */
+  }
   .entrada button{
     border:none; border-radius:999px; width:42px; height:42px; cursor:pointer;
     font-size:18px; display:grid; place-items:center; background:transparent; color:var(--tinta-suave);
@@ -284,15 +279,36 @@
   .entrada button.enviar{background:var(--verde); color:#fff}
   .entrada button.mic.grabando{background:var(--rojo); color:#fff; animation:pulso 1.2s infinite}
   @keyframes pulso{50%{box-shadow:0 0 0 8px rgba(179,64,42,.15)}}
-  .entrada button.tts.activo {
-  background: var(--verde-claro);
-  color: var(--verde);
-}
-  .pie{max-width:760px; margin:8px auto 0; text-align:center; font-size:11.5px; color:var(--tinta-suave)}
+  .entrada button.tts.activo { background: var(--verde-claro); color: var(--verde); }
+  .pie{max-width:760px; margin:8px auto 0; text-align:center; font-size:0.8em; color:var(--tinta-suave)}
 
   button:focus-visible, input:focus-visible, summary:focus-visible{outline:2px solid var(--verde); outline-offset:2px}
   @media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important} }
 
+  /* ── Modal de Configuración / Personalización ────────── */
+  #config-modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(23, 33, 27, 0.7);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 2500; opacity: 1; transition: opacity 0.2s;
+  }
+  #config-modal.oculto { display: none; opacity: 0; }
+
+  .config-container {
+    background: var(--superficie); padding: 30px; border-radius: 20px;
+    width: 380px; box-shadow: var(--sombra); display: flex; flex-direction: column; gap: 16px;
+  }
+  .config-container h3 { margin: 0; color: var(--verde); font-family: 'Fraunces', serif; text-align: center; }
+  .config-grupo { display: flex; flex-direction: column; gap: 6px; }
+  .config-grupo label { font-size: 0.9em; font-weight: 600; color: var(--tinta-suave); }
+  .config-grupo input, .config-grupo select {
+    padding: 10px; border: 1px solid var(--linea); border-radius: 8px;
+    font-family: inherit; font-size: 0.95em; outline: none; background: var(--fondo); color: var(--tinta);
+  }
+  .config-botones { display: flex; gap: 10px; margin-top: 10px; }
+  .config-botones button { flex: 1; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; }
+  .btn-guardar { background: var(--verde); color: #fff; }
+  .btn-cerrar-config { background: var(--linea); color: var(--tinta); }
 
   /* ── Teclado de Seguridad ─────────────────────────────── */
   #pin-modal {
@@ -336,28 +352,98 @@
   #btn-cancelar-pin:hover { color: var(--rojo); }
 
 
-
-
+  /* ── Estilos del Ticket de Bizum ──────────────────────── */
+  .ticket-bizum {
+    background: var(--superficie);
+    border: 1px dashed var(--linea);
+    border-radius: var(--radio);
+    padding: 18px;
+    width: min(320px, 100%);
+    box-shadow: var(--sombra);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    font-size: 0.9em;
+  }
+  .ticket-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--linea);
+    padding-bottom: 10px;
+  }
+  .ticket-header img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .ticket-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ticket-row {
+    display: flex;
+    justify-content: space-between;
+    color: var(--tinta-suave);
+  }
+  .ticket-row.importe {
+    font-size: 1.2em;
+    font-weight: 800;
+    color: var(--tinta);
+    border-top: 1px solid var(--linea);
+    padding-top: 8px;
+    margin-top: 4px;
+  }
+  .sello-exito {
+    background: var(--verde-claro);
+    color: var(--verde);
+    text-align: center;
+    padding: 6px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.85em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
 </style>
 </head>
 <body>
 
 <!-- Pantalla de Inicio de Sesión -->
 <div id="login-pantalla">
-  <div class="login-caja">
+  <div class="login-caja" style="position: relative;">
+    
+    <!-- Botón pequeño de paleta en la esquina superior derecha -->
+    <button type="button" onclick="toggleMenuColorLogin()" title="Cambiar tema de color" style="position: absolute; top: 15px; right: 15px; background: var(--fondo); border: 1px solid var(--linea); border-radius: 50%; width: 34px; height: 34px; cursor: pointer; display: grid; place-items: center; color: var(--tinta-suave);">
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"></circle>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+  </svg>
+</button>
+    
+    <!-- Menú emergente compacto y flotante -->
+    <div id="menu-color-login" class="oculto" style="position: absolute; top: 55px; right: 15px; background: var(--superficie); border: 1px solid var(--linea); border-radius: 10px; box-shadow: var(--sombra); padding: 6px; display: flex; flex-direction: column; gap: 4px; z-index: 10; width: 170px;">
+      <button type="button" onclick="seleccionarColorLogin('verde')" style="padding: 6px 10px; text-align: left; background: none; border: none; border-radius: 6px; cursor: pointer; color: var(--tinta); font-family: inherit; font-size: 0.85em;">🟢 Verde Unicaja</button>
+      <button type="button" onclick="seleccionarColorLogin('azul')" style="padding: 6px 10px; text-align: left; background: none; border: none; border-radius: 6px; cursor: pointer; color: var(--tinta); font-family: inherit; font-size: 0.85em;">🔵 Azul Corporativo</button>
+      <button type="button" onclick="seleccionarColorLogin('oscuro')" style="padding: 6px 10px; text-align: left; background: none; border: none; border-radius: 6px; cursor: pointer; color: var(--tinta); font-family: inherit; font-size: 0.85em;">🌙 Modo Oscuro</button>
+    </div>
+
     <div class="marca" style="justify-content: center; margin-bottom: 20px;">
+      <img src="unicaja.png" height="50" alt="Unicaja Banco">
       <h1>Habla con tu dinero</h1>
     </div>
     <h2>Acceso Clientes</h2>
     <p>Por favor, identifícate para continuar.</p>
     
     <input type="text" id="login-usuario" placeholder="Usuario o DNI" autocomplete="off">
-    <!-- Placeholder limpio, sin la contraseña -->
     <input type="password" id="login-pass" placeholder="Contraseña">
     
     <button class="btn-verde" style="width: 100%; padding: 12px; border-radius: 8px; font-size: 16px; margin-top: 10px;" onclick="iniciarSesion()">Entrar</button>
-    
-    <!-- Mensaje de error genérico, sin pistas -->
     <p id="login-error" class="aviso-error oculto" style="margin-top: 15px; text-align: center;">Usuario o contraseña incorrectos.</p>
   </div>
 </div>
@@ -366,11 +452,23 @@
   <div class="marca">
     <img src="unicaja.png" height="50" alt="Unicaja Banco" style="margin-right: 12px;">
     <div>
-      <h1>Habla con tu dinero</h1>
-      <span style="display: block; font-size: 12px; color: var(--tinta-suave);">Reto IA · Unicaja & UGR</span>
+      <h1 id="titulo-app">Habla con tu dinero</h1>
+      <span id="subtitulo-perfil" style="display: block; font-size: 12px; color: var(--tinta-suave);">Reto IA · Cliente Personal</span>
     </div>
   </div>
+<div class="acciones-header">
+  <!-- Botón para volver al login con icono de salida/casa -->
+  <button class="btn-config" id="btnHome" title="Cerrar sesión / Volver a inicio" onclick="volverInicio()">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+  </button>
+  
+  <!-- Botón de configuración con icono de rueda dentada -->
+  <button class="btn-config" id="btnConfig" title="Personalizar Interfaz" onclick="abrirConfig()">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+  
   <div class="saldo" id="saldo"><small>Saldo disponible</small>—</div>
+</div>
 </header>
 
 <main>
@@ -396,7 +494,41 @@
   <div class="pie">Entorno de demostración con datos ficticios · El asistente pide confirmación antes de cualquier envío de dinero</div>
 </footer>
 
-<!-- Modal del Teclado de Seguridad -->
+<div id="config-modal" class="oculto">
+    <div class="config-container">
+        <h3>Personalizar Interfaz</h3>
+        
+        <div class="config-grupo">
+          <label for="input-perfil">Nombre de Perfil / Titular</label>
+          <input type="text" id="input-perfil" placeholder="Ej. Alejandro Pérez" readonly style="background-color: var(--linea); cursor: not-allowed; opacity: 0.8;">
+      </div>
+
+        <div class="config-grupo">
+            <label for="select-color">Tema de Color</label>
+            <select id="select-color">
+                <option value="verde">Unicaja Classic (Verde)</option>
+                <option value="azul">Azul Corporativo</option>
+                <option value="oscuro">Modo Oscuro Total</option>
+            </select>
+        </div>
+
+        <div class="config-grupo">
+            <label for="select-tamano">Tamaño de Fuente</label>
+            <select id="select-tamano">
+                <option value="13px">Pequeño (13px)</option>
+                <option value="15px">Normal (15px)</option>
+                <option value="17px">Grande (17px)</option>
+                <option value="19px">Muy Grande (19px)</option>
+            </select>
+        </div>
+
+        <div class="config-botones">
+            <button class="btn-cerrar-config" onclick="cerrarConfig()">Cancelar</button>
+            <button class="btn-guardar" onclick="guardarConfig()">Guardar Cambios</button>
+        </div>
+    </div>
+</div>
+
 <div id="pin-modal" class="oculto">
     <div class="pin-container">
         <h3>Introduce tu PIN</h3>
@@ -422,15 +554,7 @@
     </div>
 </div>
 
-
 <script>
-/* =====================================================================
-   Cliente del asistente.
-   Tres piezas: (1) WebSocket con el backend, (2) voz del navegador
-   (Web Speech API: reconocimiento + síntesis), (3) render de eventos
-   (texto en streaming, chips SQL, tarjetas de gráfico Vega-Lite).
-   ===================================================================== */
-
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const saldoEl = document.getElementById('saldo');
@@ -438,38 +562,33 @@ const btnMic = document.getElementById('btnMic');
 const btnTts = document.getElementById('btnTts');
 
 let ws = null;
-let bloqueActual = null;   // contenedor de la respuesta en curso
-let burbujaActual = null;  // burbuja de texto en streaming
-let turnoActivo = false;   // hay un turno abierto (aún puede llegar más texto)
-let habladoEnStreaming = false;  // ya se ha ido leyendo la respuesta por frases
-let avisoVisual = null;    // tarjeta de "preparando una vista…", si está puesta
+let bloqueActual = null;
+let burbujaActual = null;
+let turnoActivo = false;
+let habladoEnStreaming = false;
+let avisoVisual = null;
+let ttsActivo = false;
+let ultimaEntradaFueVoz = false;
+let bufferVoz = '';
 
 function quitarAvisoVisual(){
   avisoVisual?.remove();
   avisoVisual = null;
 }
-let ttsActivo = false;     // hablar las respuestas en voz alta
-let ultimaEntradaFueVoz = false;
-let bufferVoz = ''; // NUEVO: Acumula texto para hablar por frases
 
-/* ── 1. WebSocket ──────────────────────────────────────────────────── */
 let huboConexionPrevia = false;
 
 function conectar(){
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   ws.onopen = () => {
-    // Cada conexión crea un Agente nuevo en el backend, así que al reconectar
-    // el asistente ya no recuerda nada. Antes esto pasaba en silencio y
-    // parecía que el asistente se había "olvidado" sin motivo.
     if (huboConexionPrevia) {
       avisar('Se ha reiniciado la conexión. El asistente no recuerda lo hablado hasta ahora.');
     }
     huboConexionPrevia = true;
   };
   ws.onmessage = (e) => manejarEvento(JSON.parse(e.data));
-  ws.onclose = () => setTimeout(conectar, 1000); // reconexión automática
+  ws.onclose = () => setTimeout(conectar, 1000);
 }
-//conectar();
 
 function avisar(texto){
   const aviso = document.createElement('div');
@@ -479,7 +598,6 @@ function avisar(texto){
   bajar();
 }
 
-/* ── Lógica de Inicio de Sesión ────────────────────────────────────── */
 function iniciarSesion() {
   const usuario = document.getElementById('login-usuario').value.trim();
   const pass = document.getElementById('login-pass').value.trim();
@@ -491,16 +609,17 @@ function iniciarSesion() {
     return;
   }
 
-  // Simulamos la validación en el frontend para el reto
   if (pass === "1234") {
-    // Ocultamos la pantalla de login y el mensaje de error por si estaba visible
     document.getElementById('login-pantalla').classList.add('oculto');
     msjError.classList.add('oculto'); 
     
-    // Conectamos el WebSocket y el asistente arranca
+    // Guardamos el usuario o DNI introducido (si está vacío por alguna razón, ponemos uno por defecto)
+    const perfilUsuario = usuario !== "" ? usuario : "Cliente";
+    localStorage.setItem('app_perfil', perfilUsuario);
+    aplicarConfiguracionUI();
+    
     conectar();
   } else {
-    // ¡Aquí estaba el fallo! Faltaba el bloque else para contraseñas incorrectas
     msjError.textContent = "Usuario o contraseña incorrectos.";
     msjError.classList.remove('oculto');
   }
@@ -510,7 +629,7 @@ function enviar(texto){
   texto = (texto || input.value).trim();
   if (!texto || !ws || ws.readyState !== WebSocket.OPEN) return;
   document.getElementById('sugerencias')?.remove();
-  speechSynthesis.cancel(); // si estaba hablando, calla al recibir nueva orden
+  speechSynthesis.cancel();
 
   const burbuja = document.createElement('div');
   burbuja.className = 'msg usuario';
@@ -522,15 +641,11 @@ function enviar(texto){
   bajar();
 }
 
-/* ── 2. Eventos del servidor ───────────────────────────────────────── */
 function manejarEvento(ev){
   switch (ev.type) {
-
     case 'inicio_respuesta':
       turnoActivo = true;
       habladoEnStreaming = false;
-      // Si el turno anterior dejó un aviso a medias, se retira: si no, se
-      // queda girando en un bloque que ya nadie va a completar.
       quitarAvisoVisual();
       bloqueActual = document.createElement('div');
       bloqueActual.className = 'bloque-asistente';
@@ -540,27 +655,34 @@ function manejarEvento(ev){
       chat.appendChild(bloqueActual);
       break;
 
-    case 'pedir_pin':
-      // Buscamos el párrafo subtítulo del modal
-      const subtituloPin = document.querySelector('.pin-container p');
+    case 'pedir_pin': {
+      quitarAvisoVisual();
+      // Creamos una tarjeta interactiva en el chat para que el usuario abra el PIN cuando quiera
+      const tarjetaPin = document.createElement('div');
+      tarjetaPin.className = 'tarjeta-grafico';
       
-      if (ev.error) {
-        // Si hay error, mostramos el texto en rojo
-        subtituloPin.textContent = ev.error;
-        subtituloPin.style.color = 'var(--rojo)';
-      } else {
-        // Estado normal por defecto
-        subtituloPin.textContent = 'Confirmación de operación';
-        subtituloPin.style.color = 'var(--tinta-suave)';
-      }
+      const mensajeError = ev.error ? `<p style="color: var(--rojo); font-size: 0.9em; margin: 0 0 10px 0;">${ev.error}</p>` : '';
       
-      document.getElementById('pin-modal').classList.remove('oculto');
-      clearPin();   // limpia también el PIN en memoria, no solo el display
+      tarjetaPin.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-weight: 600; color: var(--verde); display: flex; align-items: center; gap: 6px;">
+            <span>🔐</span> Confirmación de operación requerida
+          </div>
+          <p style="margin: 0; font-size: 0.9em; color: var(--tinta-suave);">Para autorizar el envío de dinero, introduce tu clave de seguridad.</p>
+          ${mensajeError}
+          <button class="btn-verde" style="padding: 10px 16px; border-radius: 8px; font-size: 0.95em; font-weight: 600; cursor: pointer; border: none; margin-top: 4px;" onclick="abrirPinPad()">
+            Introducir PIN
+          </button>
+        </div>
+      `;
+      
+      bloqueActual?.appendChild(tarjetaPin);
+      bajar();
       break;
+    }
 
-    case 'texto': // el backend emite frase a frase, según las va redactando
+    case 'texto':
       if (burbujaActual) {
-        // Si la burbuja era la de carga, la convertimos en una normal
         if (burbujaActual.classList.contains('cargando')) {
           burbujaActual.className = 'msg asistente';
           burbujaActual.innerHTML = '';
@@ -570,27 +692,19 @@ function manejarEvento(ev){
 
       if (ttsActivo || ultimaEntradaFueVoz) {
         bufferVoz += ev.delta;
-        // Cortamos por signos de puntuación fuertes seguidos de espacio
         const match = bufferVoz.match(/([.?!:])\s/);
         if (match) {
           const corte = match.index + 1;
           const frase = bufferVoz.substring(0, corte);
           bufferVoz = bufferVoz.substring(corte).trimStart();
-          // Marcamos que ya ha sonado algo de este turno: es lo que le permite
-          // a `descartar_texto` saber que hay voz que callar. Sin esta línea la
-          // bandera nunca llegaba a true y el cancel() de ahí abajo era código
-          // muerto: la burbuja se limpiaba y el TTS seguía leyendo igual.
           habladoEnStreaming = true;
-          hablar(frase); // Habla esta frase mientras el LLM sigue generando la siguiente
+          hablar(frase);
         }
-
       }
       bajar();
       break;
 
     case 'visual_generando': {
-      // El motor visual va DESPUÉS de fin_respuesta para no retrasar la voz,
-      // así que este hueco es el único aviso de que aún viene algo.
       quitarAvisoVisual();
       avisoVisual = document.createElement('div');
       avisoVisual.className = 'tarjeta-generando';
@@ -601,27 +715,21 @@ function manejarEvento(ev){
     }
 
     case 'visual_cancelado':
-      // No salió nada pintable; si no se retira, el spinner gira para siempre.
       quitarAvisoVisual();
       break;
 
     case 'descartar_texto':
-      // El modelo escribió texto y DESPUÉS llamó a una herramienta: lo que se
-      // mostró no era la respuesta, responderán las tools. Se retira y se
-      // calla el TTS para no leer algo que se va a contradecir.
       if (burbujaActual) burbujaActual.textContent = '';
-      // El trozo que aún no había cerrado frase también se descarta. Si se
-      // queda en el buffer, `fin_respuesta` lo lee pegado a la respuesta buena
-      // y sin espacio delante: "Déjame verHas gastado 124,14 €".
       bufferVoz = '';
       if (habladoEnStreaming) {
         speechSynthesis.cancel();
         habladoEnStreaming = false;
       }
       break;
+
     case 'tool_inicio':
       if (burbujaActual && !burbujaActual.textContent.trim()) {
-        burbujaActual.remove(); // Quitamos la burbuja vacía parpadeante
+        burbujaActual.remove();
       }
       burbujaActual = document.createElement('div');
       burbujaActual.className = 'msg asistente cargando';
@@ -635,18 +743,17 @@ function manejarEvento(ev){
       bajar();
       break;
 
-    case 'sql': { // transparencia: mostramos el SQL que ha generado la IA
+    case 'sql': {
       const d = document.createElement('details');
       d.className = 'sql' + (ev.error ? ' con-error' : '');
       d.innerHTML = `<summary>${ev.error ? 'Consulta con error (la IA se autocorrige)' : 'Consulta generada por la IA'}${ev.proposito ? ' · ' + escapar(ev.proposito) : ''}</summary><pre>${escapar(ev.sql)}</pre>`;
       bloqueActual?.appendChild(d);
-      // el texto de la respuesta sigue debajo del SQL:
       nuevaBurbuja();
       bajar();
       break;
     }
 
-    case 'grafico': { // la IA ha decidido y construido un gráfico Vega-Lite
+    case 'grafico': {
       quitarAvisoVisual();
       const tarjeta = document.createElement('div');
       tarjeta.className = 'tarjeta-grafico';
@@ -660,7 +767,6 @@ function manejarEvento(ev){
         tarjeta.appendChild(p);
       }
       bloqueActual?.appendChild(tarjeta);
-      // Tema visual coherente con la interfaz:
       ev.spec.config = Object.assign({
         font: 'Manrope', background: 'transparent',
         range: { category: ['#0E6B4F','#5AA98C','#B3402A','#D9A441','#33556B','#8A8F6A','#7A4E7E','#C87456'] },
@@ -671,16 +777,12 @@ function manejarEvento(ev){
       vegaEmbed(vega, ev.spec, { actions:false }).catch(err => {
         vega.textContent = 'No se pudo renderizar el gráfico: ' + err.message;
       });
-      // Solo si el turno sigue abierto. El gráfico del motor visual llega
-      // DESPUÉS de fin_respuesta —para no retrasar la voz—, y ahí una burbuja
-      // nueva se quedaría vacía enseñando el punto de "escribiendo" para
-      // siempre (ver .msg.asistente:empty::after).
       if (turnoActivo) nuevaBurbuja();
       bajar();
       break;
     }
 
-    case 'tabla': { // la IA ha decidido que estos datos se leen mejor en tabla
+    case 'tabla': {
       quitarAvisoVisual();
       const tarjeta = document.createElement('div');
       tarjeta.className = 'tarjeta-grafico';
@@ -710,15 +812,12 @@ function manejarEvento(ev){
       const tbody = document.createElement('tbody');
       for (const fila of ev.filas) {
         const tr = document.createElement('tr');
-        
         for (let i = 0; i < ev.columnas.length; i++) {
           const col = ev.columnas[i];
           const td = document.createElement('td');
-          
           const valorBruto = fila[col.campo] ?? '';
           const valorTexto = formatearCelda(valorBruto, col.formato);
           
-          // Añade el logotipo o dibujo dinámico en la primera columna de texto
           if (i === 0 && col.formato !== 'euros' && col.formato !== 'numero' && valorTexto) {
             const dominio = String(valorTexto).toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
             const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(valorTexto)}&background=0E6B4F&color=fff&rounded=true`;
@@ -735,7 +834,6 @@ function manejarEvento(ev){
             td.textContent = valorTexto;
             if (col.formato === 'euros' || col.formato === 'numero') td.className = col.formato;
           }
-          
           tr.appendChild(td);
         }
         tbody.appendChild(tr);
@@ -769,14 +867,27 @@ function manejarEvento(ev){
       turnoActivo = false;
       if (burbujaActual && !burbujaActual.textContent) burbujaActual.remove();
 
+      // Detectar automáticamente si la respuesta corresponde a un Bizum exitoso
+      if (ev.texto && ev.texto.includes("Bizum enviado correctamente")) {
+        const regex = /Bizum enviado correctamente a (.+?) por ([0-9.,]+\s*€)(?:\s+con\s+concepto\s+([^.]+?))?\./i;
+        const match = ev.texto.match(regex);
+        if (match) {
+          const destinatario = match[1];
+          const importeStr = match[2].replace(/[^\d,.-]/g, "").replace(",", ".");
+          const importe = parseFloat(importeStr) || 0;
+          const concepto = match[3] ? match[3].trim().replace(/['"]+/g, '') : "Envío instantáneo";
+          
+          mostrarTicketBizum(destinatario, importe, concepto);
+        }
+      }
+
       if (ttsActivo || ultimaEntradaFueVoz) {
         if (bufferVoz.trim()) {
           hablar(bufferVoz);
         }
       }
       
-      bufferVoz = ''; // Limpiamos para el siguiente turno
-
+      bufferVoz = '';
       ultimaEntradaFueVoz = false;
       bajar();
       break;
@@ -790,34 +901,24 @@ function manejarEvento(ev){
       bajar();
       break;
     }
-
-
   }
 }
 
 function formatearCelda(valor, formato){
-  // El backend manda los datos crudos; el formato español se aplica aquí, que
-  // es donde ya se formatea el saldo, en vez de pedírselo al modelo.
   if (valor === null || valor === undefined || valor === '') return '—';
   if (typeof valor === 'boolean') return valor ? 'Sí' : 'No';
-
   if (formato === 'euros' && typeof valor === 'number')
     return valor.toLocaleString('es-ES', { style:'currency', currency:'EUR' });
-
   if (formato === 'numero' && typeof valor === 'number')
     return valor.toLocaleString('es-ES');
-
   if (formato === 'fecha'){
     const d = new Date(valor);
     if (!isNaN(d)) return d.toLocaleDateString('es-ES');
   }
-
   return String(valor);
 }
 
 function nuevaBurbuja(){
-  // Tras un SQL o un gráfico, el texto siguiente va en una burbuja nueva.
-  // Si estaba la burbuja de carga o una vacía, la eliminamos.
   if (burbujaActual && (!burbujaActual.textContent.trim() || burbujaActual.classList.contains('cargando'))) { 
     burbujaActual.remove(); 
   }
@@ -826,7 +927,6 @@ function nuevaBurbuja(){
   bloqueActual?.appendChild(burbujaActual);
 }
 
-/* ── 3. Voz del navegador (Web Speech API) ─────────────────────────── */
 const Reconocedor = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 
@@ -844,15 +944,8 @@ if (Reconocedor) {
   };
   rec.onend = () => {
     btnMic.classList.remove('grabando');
-
-    // El reconocimiento puede terminar sin haber emitido un resultado final
-    // (pasa al cortar por silencio): ahí el texto se queda en el input sin
-    // enviarse y la orden se pierde. `enviar()` vacía el input, así que si
-    // `onresult` ya lo mandó aquí no queda nada y no se duplica el envío.
     const pendiente = input.value.trim();
     if (!pendiente) return;
-
-    // El usuario ha hablado, así que se le responde hablando.
     if (!ttsActivo) {
       ttsActivo = true;
       btnTts.classList.add('activo');
@@ -860,10 +953,7 @@ if (Reconocedor) {
     ultimaEntradaFueVoz = true;
     enviar(pendiente);
   };
-
   rec.onerror = () => btnMic.classList.remove('grabando');
-} else {
-  btnMic.title = 'Tu navegador no soporta reconocimiento de voz (prueba Chrome)';
 }
 
 btnMic.addEventListener('click', () => {
@@ -889,7 +979,6 @@ btnTts.addEventListener('click', () => {
   if (!ttsActivo) speechSynthesis.cancel();
 });
 
-/* ── Utilidades ────────────────────────────────────────────────────── */
 document.getElementById('btnEnviar').addEventListener('click', () => enviar());
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviar(); });
 document.getElementById('sugerencias').addEventListener('click', (e) => {
@@ -898,8 +987,6 @@ document.getElementById('sugerencias').addEventListener('click', (e) => {
 function bajar(){ chat.parentElement.scrollTop = chat.parentElement.scrollHeight; }
 function escapar(s){ const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 
-
-/* ── 4. Lógica del Teclado de Seguridad ────────────────────────────── */
 let currentPin = '';
 
 function addPin(num) {
@@ -916,7 +1003,6 @@ function clearPin() {
 
 function sendPin() {
   if (currentPin.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
-    // Ocultar modal y enviar payload de seguridad
     document.getElementById('pin-modal').classList.add('oculto');
     ws.send(JSON.stringify({ type: 'auth_bizum', pin: currentPin }));
     currentPin = '';
@@ -926,36 +1012,161 @@ function sendPin() {
 function cancelarPin() {
   document.getElementById('pin-modal').classList.add('oculto');
   currentPin = '';
-  // Enviar mensaje de cancelación normal por el chat
   enviar('cancela');
 }
 
-document.addEventListener('keydown', (e) => {
-  // Ignorar si el usuario está escribiendo en un input o si la tecla se está repitiendo
-  if (e.target.tagName === 'INPUT' || e.repeat) return;
+function abrirPinPad() {
+  document.getElementById('pin-modal').classList.remove('oculto');
+  clearPin();
+}
 
+
+function mostrarTicketBizum(destinatario, importe, concepto) {
+  const tarjeta = document.createElement('div');
+  tarjeta.className = 'ticket-bizum';
+  
+  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(destinatario)}&background=0E6B4F&color=fff&rounded=true`;
+  const fechaActual = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  tarjeta.innerHTML = `
+    <div class="sello-exito">
+      <span>✓</span> Bizum Enviado con Éxito
+    </div>
+    <div class="ticket-header">
+      <img src="${avatarUrl}" alt="Destinatario">
+      <div>
+        <div style="font-weight: 700; color: var(--tinta);">${escapar(destinatario)}</div>
+        <div style="font-size: 0.8em; color: var(--tinta-suave);">Móvil vinculado</div>
+      </div>
+    </div>
+    <div class="ticket-body">
+      <div class="ticket-row"><span>Fecha</span> <span>${fechaActual}</span></div>
+      <div class="ticket-row"><span>Concepto</span> <span>${escapar(concepto || 'Envío instantáneo')}</span></div>
+      <div class="ticket-row importe"><span>Importe</span> <span style="color: var(--verde);">${Number(importe).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span></div>
+    </div>
+  `;
+
+  bloqueActual?.appendChild(tarjeta);
+  bajar();
+}
+
+/* ── Funciones de Personalización y Configuración ──────── */
+function abrirConfig() {
+  document.getElementById('input-perfil').value = localStorage.getItem('app_perfil') || 'Cliente Personal';
+  document.getElementById('select-color').value = localStorage.getItem('app_color') || 'verde';
+  document.getElementById('select-tamano').value = localStorage.getItem('app_tamano') || '15px';
+  document.getElementById('config-modal').classList.remove('oculto');
+}
+
+function cerrarConfig() {
+  document.getElementById('config-modal').classList.add('oculto');
+}
+
+function guardarConfig() {
+  const perfil = localStorage.getItem('app_perfil') || 'Cliente';
+  const color = document.getElementById('select-color').value;
+  const tamano = document.getElementById('select-tamano').value;
+
+  localStorage.setItem('app_perfil', perfil);
+  localStorage.setItem('app_color', color);
+  localStorage.setItem('app_tamano', tamano);
+
+  aplicarConfiguracionUI();
+  cerrarConfig();
+}
+
+
+function toggleMenuColorLogin() {
+  const menu = document.getElementById('menu-color-login');
+  menu.classList.toggle('oculto');
+}
+
+function seleccionarColorLogin(color) {
+  localStorage.setItem('app_color', color);
+  aplicarConfiguracionUI();
+  document.getElementById('menu-color-login').classList.add('oculto');
+  
+  const selectModal = document.getElementById('select-color');
+  if (selectModal) selectModal.value = color;
+}
+
+function aplicarConfiguracionUI() {
+  // Aplicar Perfil
+  const perfil = localStorage.getItem('app_perfil') || 'Cliente Personal';
+  const subPerfil = document.getElementById('subtitulo-perfil');
+  if (subPerfil) subPerfil.textContent = `Reto IA · ${perfil}`;
+
+  // Aplicar Tamaño de Fuente dinámico
+  const tamano = localStorage.getItem('app_tamano') || '15px';
+  document.documentElement.style.setProperty('--tamano-base', tamano);
+
+  // Aplicar Temas de Color (redefiniendo todas las variables para evitar que se solapen)
+  const color = localStorage.getItem('app_color') || 'verde';
+  const root = document.documentElement;
+
+  if (color === 'azul') {
+    root.style.setProperty('--fondo', '#F0F4F8');
+    root.style.setProperty('--superficie', '#FFFFFF');
+    root.style.setProperty('--tinta', '#0D1B2A');
+    root.style.setProperty('--tinta-suave', '#415A77');
+    root.style.setProperty('--verde', '#1B4965');
+    root.style.setProperty('--verde-claro', '#D0E1ED');
+    root.style.setProperty('--linea', '#D8E2EC');
+  } else if (color === 'oscuro') {
+    root.style.setProperty('--fondo', '#121815');
+    root.style.setProperty('--superficie', '#1B2420');
+    root.style.setProperty('--tinta', '#E2E8F0');
+    root.style.setProperty('--tinta-suave', '#94A3B8');
+    root.style.setProperty('--verde', '#10B981');
+    root.style.setProperty('--verde-claro', '#064E3B');
+    root.style.setProperty('--linea', '#2D3748');
+  } else {
+    // Valores por defecto (Verde Unicaja)
+    root.style.setProperty('--fondo', '#EFF3EF');
+    root.style.setProperty('--superficie', '#FFFFFF');
+    root.style.setProperty('--tinta', '#17211B');
+    root.style.setProperty('--tinta-suave', '#5C6B61');
+    root.style.setProperty('--verde', '#0E6B4F');
+    root.style.setProperty('--verde-claro', '#E3EFE9');
+    root.style.setProperty('--linea', '#DDE4DE');
+  }
+}
+function volverInicio() {
+  // Opcional: limpiar la conexión o reiniciar estados
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  // Limpiar campos de login y errores
+  document.getElementById('login-usuario').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-error').classList.add('oculto');
+  
+  // Mostrar la pantalla de login
+  document.getElementById('login-pantalla').classList.remove('oculto');
+}
+
+// Cargar la personalización guardada al iniciar la página
+window.addEventListener('DOMContentLoaded', () => {
+  aplicarConfiguracionUI();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.repeat) return;
   if (e.code === 'Space') {
-    e.preventDefault(); // Evita que la página haga scroll hacia abajo
-    
-    // Si el reconocimiento existe y NO está grabando, simulamos un clic
-    if (rec && !btnMic.classList.contains('grabando')) {
-      btnMic.click(); 
-    }
+    e.preventDefault();
+    if (rec && !btnMic.classList.contains('grabando')) { btnMic.click(); }
   }
 });
 
 document.addEventListener('keyup', (e) => {
   if (e.target.tagName === 'INPUT') return;
-
   if (e.code === 'Space') {
     e.preventDefault();
-    
-    // Si el micro está grabando, simulamos un clic para detenerlo y enviar el audio
-    if (rec && btnMic.classList.contains('grabando')) {
-      btnMic.click(); 
-    }
+    if (rec && btnMic.classList.contains('grabando')) { btnMic.click(); }
   }
 });
+
 
 </script>
 </body>
