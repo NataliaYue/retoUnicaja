@@ -286,7 +286,29 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
         return None
 
     patrones = [
-        # 1. Con cantidad antes o después y concepto explícito al final (soporta puntos en nombres como "Lucia G.")
+        # 1. Haz un Bizum a María López de 20 euros [para la cena]
+        #
+        # Va la PRIMERA a propósito, y las dos cosas que la hacen funcionar son
+        # sutiles:
+        #
+        # - El `\s+` va DENTRO del grupo opcional del concepto. Fuera, exigía un
+        #   espacio detrás del importe aunque no hubiera concepto, así que este
+        #   patrón NO casaba con "…de 20 euros" a secas.
+        # - Y por eso caía en el patrón general de abajo, cuyo marcador de
+        #   concepto acepta un `de` suelto: interpretaba "de 20 euros" como el
+        #   concepto y dejaba la cantidad a cero. Es la forma más natural de
+        #   pedir un Bizum y la que está en el guion de demo del README.
+        (
+            r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
+            r"(?:un\s+)?bizum\s+a\s+"
+            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)\s+(?:de|por)\s+"
+            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?"
+            r"(?:\s+(?:para|de|por|con\s+concepto)\s+(?P<concepto>.+))?$"
+        ),
+
+        # 2. Caso general: cantidad antes o después del destinatario, con
+        #    concepto explícito al final. Cubre "haz un bizum de 20 euros a Ana
+        #    para la cena", que el patrón 1 no alcanza.
         (
             r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
             r"(?:un\s+)?bizum\s+"
@@ -296,15 +318,6 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
             r"\s+(?:con\s+concepto|concepto|para|de|por)\s+(?P<concepto>.+)$"
         ),
 
-        # 2. Haz un Bizum a María López de 20 euros con concepto cena (o para la cena)
-        (
-            r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
-            r"(?:un\s+)?bizum\s+a\s+"
-            r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)\s+(?:de|por)\s+"
-            r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+"
-            r"(?:(?:para|de|por|con\s+concepto)\s+(?P<concepto>.+))?$"
-        ),
-        
         # 3. Envía 20 euros a María López por Bizum con concepto cena
         (
             r"^(?:envia|envía|manda|mandar)\s+"
@@ -780,11 +793,13 @@ class Agente:
         # pedir una clave para algo que se sabe que va a fallar es lo peor que
         # puede hacer aquí.
         if cantidad <= 0:
-            self.bizum_pendiente = {
-                "destinatario": destinatario_original,
-                "cantidad": 0.0,
-                "concepto": concepto,
-            }
+            # NO se deja `bizum_pendiente`. Ese estado significa "esperando el
+            # PIN", y `gestionar_bizum_pendiente` intercepta con él todos los
+            # turnos siguientes: al responder "20 euros" a la pregunta de abajo,
+            # el usuario recibía "introduce tu PIN o escribe cancela" y la
+            # conversación se quedaba atascada. Aquí no se espera un PIN, se
+            # espera un importe, y de eso ya se encarga el LLM en el turno
+            # siguiente con el historial delante.
             anotar({
                 "estado": "error",
                 "motivo": "Falta la cantidad. Se le ha preguntado al usuario.",
