@@ -1,0 +1,22 @@
+\section{Configuración, Generación y Seguridad de la Base de Datos}
+
+Para poner a prueba un asistente financiero inteligente, no basta con tener un buen modelo de lenguaje; necesitamos un escenario de datos rico, realista y, sobre todo, un entorno de ejecución completamente seguro. Por ello, el diseño de la base de datos se ha abordado desde dos frentes: la simulación de la vida financiera del usuario y la protección de su información.
+
+\subsection{Una simulación realista y reproducible}
+Aunque el enunciado del reto sugería el uso de un LLM para la generación masiva de datos, decidimos tomar un camino más controlado. Implementamos un generador determinista en Python (fijando una semilla de aleatoriedad) y limitamos el uso de la IA a la redacción del catálogo de comercios. Esta decisión nos dio una ventaja crucial: una base de datos 100\% reproducible. Esto es indispensable no solo para depurar el código sin que los datos cambien constantemente, sino para poder grabar una demostración en vídeo sólida y predecible.
+
+Para enriquecer este entorno, aplicamos las siguientes estrategias en la generación de datos:
+\begin{itemize}
+    \item \textbf{Histórico extendido de 24 meses:} Si generábamos solo un año de datos, un pago anual como el seguro del coche aparecería una única vez, haciendo matemáticamente imposible que el sistema detectara la recurrencia. Al ampliar la ventana a dos años, garantizamos que el asistente pueda responder a preguntas como \textit{``¿cuándo pagué el seguro del coche?''}.
+    \item \textbf{Patrones ocultos e inyección de ruido:} No queríamos ponérselo fácil a nuestro motor analítico. Intercalamos recibos mensuales exactos (alquiler), pagos bimestrales (agua) y gastos recurrentes de importe variable (luz). Además, programamos subidas de precio simuladas (como un incremento en la cuota de Netflix a mitad del histórico) para que el asistente realmente tuviera que esforzarse en detectar estos cambios entre todo el ``ruido'' de compras diarias en supermercados o gasolineras.
+    \item \textbf{Convención de signos:} Diseñamos un esquema muy limpio con dos tablas (\texttt{cliente} y \texttt{movimientos}). Almacenar todos los gastos en negativo y los ingresos en positivo resultó ser un ``truco'' excelente para simplificar la vida del LLM, ya que le permite filtrar gastos en sus consultas SQL simplemente añadiendo la condición \texttt{importe < 0}.
+\end{itemize}
+
+\subsection{Seguridad y Defensa en Profundidad (IA Responsable)}
+Dar a un modelo de lenguaje la capacidad de escribir código SQL sobre una base de datos real requiere medidas de seguridad estrictas. Para cumplir con los principios de una IA Responsable, hemos implementado un patrón de ``defensa en profundidad'':
+
+\begin{itemize}
+    \item \textbf{Aislamiento en modo lectura:} Cualquier consulta SQL que el asistente genere para responder dudas del usuario (el flujo \textit{Text-to-SQL}) se ejecuta en una conexión a la base de datos configurada estrictamente como solo lectura (\texttt{mode=ro}). Si el LLM tiene una alucinación e intenta modificar algo, el propio motor de la base de datos lo bloquea físicamente.
+    \item \textbf{Filtros y protección de contexto:} Antes de ejecutar el código del LLM, pasamos la consulta por una lista negra que bloquea palabras como INSERT, UPDATE o DROP. Además, limitamos drásticamente el número de filas que la base de datos puede devolver (50 filas máximo) para evitar desbordar la memoria del modelo y mantener una respuesta ágil.
+    \item \textbf{Transaccionalidad para operaciones reales:} Cuando el usuario pide hacer una operación real, como enviar un Bizum, el sistema cambia las reglas. Estas acciones nunca utilizan SQL generado por la IA. En su lugar, el backend toma el control utilizando consultas parametrizadas seguras y bloques transaccionales estrictos (\texttt{BEGIN IMMEDIATE}) para evitar condiciones de carrera, asegurando que el dinero y el saldo se muevan siempre de forma exacta y coherente.
+\end{itemize}

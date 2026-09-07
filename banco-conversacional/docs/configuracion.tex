@@ -1,0 +1,85 @@
+% -------------------------------------------------
+% PAQUETES
+% -------------------------------------------------
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+
+\usepackage{lmodern}
+\usepackage[a4paper, margin=2.5cm]{geometry}
+
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{titlesec}
+
+% -------------------------------------------------
+% COLORES
+% -------------------------------------------------
+
+\definecolor{ugrred}{RGB}{150,0,24}
+\definecolor{subsectionblue}{RGB}{30,70,110}
+
+% -------------------------------------------------
+% CONFIGURACIÓN DE HYPERREF
+% -------------------------------------------------
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=ugrred,
+    urlcolor=ugrred,
+    citecolor=ugrred
+}
+
+
+\newcommand{\logougr}{figuras/logo_ugr.png}
+\newcommand{\logounicaja}{figuras/logo_unicaja.png}
+
+\newcommand{\logoUGR}{%
+    \IfFileExists{\logougr}
+    {\includegraphics[height=1.8cm]{\logougr}}
+    {\textcolor{ugrred}{\Large\textbf{UGR}}}
+}
+
+\newcommand{\logoUnicaja}{%
+    \IfFileExists{\logounicaja}
+    {\includegraphics[height=1.8cm]{\logounicaja}}
+    {\textcolor{darkgray}{\Large\textbf{UNICAJA}}}
+}
+
+% -------------------------------------------------
+% ESTILO DE TÍTULOS
+% -------------------------------------------------
+
+\titleformat{\section}
+  {\Large\bfseries\color{ugrred}}
+  {\thesection.}
+  {0.6em}
+  {}
+  [\vspace{0.2em}\color{ugrred}\titlerule]
+
+% Subsecciones
+\titleformat{\subsection}
+  {\large\bfseries\color{subsectionblue}}
+  {\thesubsection.}
+  {0.6em}
+  {}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\color{darkgray}}
+  {\thesubsubsection.}
+  {0.6em}
+  {}
+
+% Espaciado
+\titlespacing*{\section}
+  {0pt}{3.5ex plus 1ex minus .2ex}{2.3ex}
+
+\titlespacing*{\subsection}
+  {0pt}{3ex plus .8ex minus .2ex}{1.5ex}
+
+\titlespacing*{\subsubsection}
+  {0pt}{2.5ex plus .5ex minus .2ex}{1ex}
