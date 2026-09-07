@@ -1,5 +1,5 @@
 """
-Evaluación de la precisión del asistente (30 pts del baremo).
+Evaluación de la precisión del asistente.
 
 Lanza las preguntas de `preguntas.jsonl` contra el agente real.
 
@@ -9,36 +9,25 @@ PUNTÚAN TRES COSAS, porque fallan por motivos distintos:
      suscripciones y que se ponga a escribir SQL es un fallo aunque el número
      salga bien. Se registra con un espía sobre `ejecutar_tool`, así se ven
      también los atajos del backend, que no pasan por el historial del LLM.
-     Un caso puede admitir varias herramientas válidas (lista).
+     Un caso puede admitir varias herramientas válidas.
 
   2. RESPUESTA FINAL. Es lo único que oye el usuario. Se comprueba que los
      valores esperados aparezcan en el texto, con formato español.
 
-  3. REFUERZO VISUAL CUANDO TOCA. Son 20 pts del baremo (lógica visual +
-     gráficos sin plantillas), más que ninguna otra cosa salvo la precisión.
-     Los casos con `espera_visual` se puntúan en los dos sentidos: no mostrar
-     nada donde hay varios valores comparables es un fallo, y mostrar algo
-     donde la respuesta es un único dato también, porque el criterio del
-     propio system prompt lo prohíbe.
+  3. REFUERZO VISUAL CUANDO TOCA. Los casos con `espera_visual` 
+     se puntúan en los dos sentidos: no mostrar nada donde hay varios valores
+     comparables es un fallo, y mostrar algo donde la respuesta es un único dato también,
+     porque el criterio del propio system prompt lo prohíbe.
 
-     Cuenta IGUAL una tabla que un gráfico: cuál de las dos es la mejor
-     representación lo decide el modelo, y las dos son respuestas válidas.
-     Forzar una de ellas convertiría en fallo una decisión de diseño
-     defendible. Se lee de los eventos `grafico` y `tabla` del WebSocket, así
-     que mide lo que de verdad le llega al frontend.
-
-  4. SPEC PINTABLE. Que llegue un gráfico no significa que se vea: una spec
-     sin `mark` pasa el filtro de `tools.py` (que solo exige `data.values`,
-     a propósito, para admitir layer y concat) y revienta después en
-     `vega-embed`, donde ya no lo registra nadie. Puntúa, y va aparte de la
-     métrica 3 porque son fallos de cosas distintas: uno es el modelo
+  4. SPEC PINTABLE. Que llegue un gráfico no significa que se vea.
+     Puntúa, y va aparte de la métrica 3 porque son fallos de cosas distintas: uno es el modelo
      decidiendo si toca refuerzo, el otro el modelo redactando la spec.
 
 Y SE MIDE, SIN PUNTUAR, un indicador de DIAGNÓSTICO: se ejecutan la consulta
 del agente y una de referencia escrita a mano y se comparan los valores. Sirve
 para saber POR QUÉ falló una respuesta, pero no cuenta para la nota: el modelo
-puede elegir una interpretación distinta y defendible (otro periodo, otra
-forma de calcular una media) y divergir de la referencia sin estar equivocado.
+puede elegir una interpretación distinta y defendible y divergir de la referencia sin estar equivocado.
+
 Nunca se compara el TEXTO del SQL: hay muchas consultas correctas distintas
 para la misma pregunta.
 
@@ -153,9 +142,7 @@ def spec_pintable(spec) -> bool:
     el agente da el gráfico por mostrado y luego falla en `vega-embed`, donde
     ya no lo ve nadie. Aquí sí queda registrado.
 
-    Se busca cada clave en todo el árbol en vez de exigirlas en la raíz: en un
-    `layer` la marca vive en los hijos y el encoding puede estar heredado del
-    padre, y exigir ambas en el mismo nivel daría fallos falsos.
+    Se busca cada clave en todo el árbol en vez de exigirlas en la raíz
     """
     return _busca_clave(spec, "mark") and _busca_clave(spec, "encoding")
 
@@ -183,8 +170,7 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
     # Agilidad percibida: cuándo se emite `fin_respuesta`, que es el evento que
     # dispara el TTS en el frontend. Es lo que el usuario experimenta como
     # "cuánto tarda". El gráfico del motor visual llega después a propósito, así
-    # que entra en `latencia` pero no en esta: medir solo el total penalizaría
-    # un trabajo que ya no bloquea la respuesta.
+    # que entra en `latencia` pero no en esta.
     latencia_voz = next(
         (t - inicio for e, t in zip(reversed(eventos), reversed(instantes))
          if e["type"] == "fin_respuesta"),
@@ -220,9 +206,7 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
         "spec_ok": None,
     }
 
-    # 1. Herramienta correcta. Admite una lista: a veces hay más de una vía
-    # legítima ("¿cuánto pago de media de luz?" se puede responder con SQL o
-    # con el detector de pagos recurrentes, y ninguna de las dos está mal).
+    # 1. Herramienta correcta
     if "tool" in caso:
         if caso["tool"] is None:
             resultado["tool_ok"] = not espia
@@ -277,7 +261,7 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
             normalizar(t) in normalizar(respuesta) for t in caso["contiene_alguno"]
         )
 
-    # 4. Gráfico cuando toca (20 pts del baremo: lógica visual + sin plantillas).
+    # 4. Gráfico.
     # Se puntúa en los dos sentidos: no pintar donde hay varios valores
     # comparables es un fallo, y pintar donde la respuesta es un único dato
     # también, porque el criterio del prompt dice explícitamente que no.

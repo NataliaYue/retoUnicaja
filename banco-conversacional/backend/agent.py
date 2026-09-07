@@ -123,7 +123,7 @@ def es_consulta_saldo(mensaje: str) -> bool:
       queda por pagar del alquiler?".
     """
     texto = normalizar_texto(mensaje)
-    texto = re.sub(r"[^\w\s]", " ", texto)          # ¿?, €, comas...
+    texto = re.sub(r"[^\w\s]", " ", texto)
     texto = re.sub(r"\s+", " ", texto).strip()
 
     if not texto:

@@ -22,8 +22,8 @@ from datetime import date
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 
-from backend.analitica import analizar_recurrencia  # noqa: E402
-from backend.seed import generar_movimientos  # noqa: E402
+from backend.analitica import analizar_recurrencia
+from backend.seed import generar_movimientos
 
 # Comercios que SON recurrentes por construcción en seed.py (solo gastos: la
 # nómina es un ingreso y el detector solo mira importes negativos).

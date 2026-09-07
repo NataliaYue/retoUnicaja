@@ -5,12 +5,8 @@ Por qué existe: `tests/evaluar.py` NO cubre este camino. Sus cuatro preguntas
 de "bizum" son consultas sobre bizums pasados ("¿cuánto le he enviado a
 María?"), que se resuelven con SQL. Ninguna toca `extraer_peticion_bizum`,
 `preparar_bizum_desde_backend`, `validar_pin_bizum` ni el contador de intentos.
-Se puede romper el envío entero y el banco de evaluación seguiría dando 97 %.
 
-Todo este flujo es lógica de backend, sin LLM, así que el test es determinista
-y tarda segundos: no depende de que Ollama esté levantado ni de la varianza del
-modelo. Es la red de seguridad para refactorizar `agent.py`, donde el flujo
-está escrito dos veces (`preparar_bizum_desde_backend` y la rama del tool call).
+Todo este flujo es lógica de backend, sin LLM, así que el test es determinista.
 
 La base de datos se copia antes de empezar y se restaura al final: los envíos
 mueven saldo de verdad e insertan movimientos.
@@ -71,7 +67,7 @@ def comprueba(ok: bool, etiqueta: str, detalle: str = "") -> bool:
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 1. Reconocimiento de la petición (regex, sin LLM)
+# 1. Reconocimiento de la petición
 # ──────────────────────────────────────────────────────────────────────────
 
 def test_extraccion() -> list[bool]:
@@ -108,7 +104,7 @@ def test_extraccion() -> list[bool]:
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# 2. Validación del importe (antes de pedir el PIN)
+# 2. Validación del importe
 # ──────────────────────────────────────────────────────────────────────────
 
 def test_limites_importe() -> list[bool]:
@@ -211,8 +207,6 @@ async def test_flujo() -> list[bool]:
     await ag.preparar_bizum_desde_backend({"destinatario": "Maria Lop", "cantidad": 10.0, "concepto": ""})
     if ag.correccion_contacto_pendiente:
         g.limpiar()
-        # Esta rama tumbaba el WebSocket entero: leía `bizum_pendiente`, que
-        # aquí todavía es None. Es el bug de la Fase 0; que no vuelva.
         await ag.gestionar_correccion_contacto_pendiente("no")
         r.append(comprueba(ag.bizum_pendiente is None and ag.correccion_contacto_pendiente is None,
                            "rechaza la sugerencia → cancela sin reventar", g.texto[:80]))
@@ -266,7 +260,7 @@ def test_concurrencia() -> list[bool]:
     y el segundo UPDATE pisa al primero: salen 1.200 € de una cuenta con 1.000
     y el saldo solo baja 600.
 
-    Aquí se comprueba la PROPIEDAD que lo impide, no el síntoma. Una carrera
+    Aquí se comprueba la PROPIEDAD que lo impide. Una carrera
     solo se manifiesta cuando los hilos coinciden en una ventana de
     milisegundos: un test que dependa de eso pasaría casi siempre aunque el
     arreglo se hubiera quitado, y como red de seguridad no valdría nada.
