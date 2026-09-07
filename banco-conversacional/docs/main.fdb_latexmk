@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1788801279.07564 "c:/Users/Lenovo/Desktop/retoCajaRural/banco-conversacional/docs/main.tex" "main.pdf" "main" 1788801280.90306 0
-  "C:/Users/Lenovo/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1788800187 383578 24025354f78052859c6f975aea229522 ""
+["pdflatex"] 1788801553.02078 "c:/Users/Lenovo/Desktop/retoCajaRural/banco-conversacional/docs/main.tex" "main.pdf" "main" 1788801554.66149 0
+  "C:/Users/Lenovo/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1788801391 383578 24025354f78052859c6f975aea229522 ""
   "C:/Users/Lenovo/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1788782022 13373530 6613a8cf615ea626ac009f73b44238e7 ""
   "C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-ec.enc" 1256929440 2375 baa924870cfb487815765f9094cf3728 ""
   "C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/fonts/tfm/jknappen/ec/ecrm1200.tfm" 993062126 3152 4850ff0163852b7fab34bd55e1197f28 ""
@@ -89,9 +89,10 @@
   "C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/tex/latex/refcount/refcount.sty" 1576433952 9878 9e94e8fa600d95f9c7731bb21dfb67a4 ""
   "C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1751104012 9684 a33a14b82ce60d6e77cb9be689d79ee6 ""
   "C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/tex/latex/titlesec/titlesec.sty" 1736608268 48766 87a17a4ef312a39cd43896e34a679a56 ""
+  "C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/tex/latex/tocloft/tocloft.sty" 1788001145 46108 99d5ca1deaafb1c3e13e4798e4cc4a0e ""
   "C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/tex/latex/url/url.sty" 1388490452 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/tex/latex/xcolor/xcolor.sty" 1656236890 56148 51a9a8571c07b9921892ae11063ae853 ""
-  "c:/Users/Lenovo/Desktop/retoCajaRural/banco-conversacional/docs/main.tex" 1788800202 636 277adc510cf51b189e481f4cbc5c3e4c ""
+  "c:/Users/Lenovo/Desktop/retoCajaRural/banco-conversacional/docs/main.tex" 1788801503 674 4c82eb41d788b83a312a76eaf0db7183 ""
   "capitulos/1intro_y_arquitectura.tex" 1788799472 132 d8ff3d6884b89f30cd30e5d2a8f0e7d2 ""
   "capitulos/2Interaccion_natural_y_UX.tex" 1788800166 201 2b86247bce3e61c8a1e3432571024acf ""
   "capitulos/3Configuracion_y_seguridad_BD.tex" 1788801165 4065 4e78bf8e7d23cf33af816dd02eea4699 ""
@@ -100,12 +101,12 @@
   "capitulos/6consultasSQL_y_Analitica_Avanzada.tex" 1788800073 187 aa3052ddc132a62d2ca675d76d40ebd6 ""
   "capitulos/7Agente_y_Tool_Calling.tex" 1788800073 33 83532efe5664ef1048e9704bb63d9e3d ""
   "capitulos/8Conclusiones_y_Cumplimiento_Del_Baremo.tex" 1788800086 48 a766b9b463e80f5e2e601c19031fe921 ""
-  "configuracion.tex" 1788801278 2029 17fb4c427dbc92e8d9289b8fccc24066 ""
+  "configuracion.tex" 1788801552 2962 358d8c5dfc4fb1716bb6118538300b2e ""
   "figuras/logo_ugr.png" 1788780832 193047 a584269e7c3652158a050707a003c3af ""
   "figuras/logo_unicaja.png" 1788781026 24119 29fcf3c5c8b90273fcf3dd6c40907f37 ""
-  "main.aux" 1788801280 14266 0182fc713af7b2bdc4ed52e2495f28eb "pdflatex"
-  "main.tex" 1788800202 636 277adc510cf51b189e481f4cbc5c3e4c ""
-  "main.toc" 1788801280 2249 5a9e89463f5638e52f20c97e4dd1a49e "pdflatex"
+  "main.aux" 1788801554 14266 0182fc713af7b2bdc4ed52e2495f28eb "pdflatex"
+  "main.tex" 1788801503 674 4c82eb41d788b83a312a76eaf0db7183 ""
+  "main.toc" 1788801554 2249 5a9e89463f5638e52f20c97e4dd1a49e "pdflatex"
   "portada.tex" 1788782062 984 23026547a45ac6649861d679a88475ed ""
   (generated)
   "main.aux"

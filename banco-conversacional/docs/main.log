@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.5) (preloaded format=pdflatex 2026.9.7)  7 SEP 2026 19:14
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.5) (preloaded format=pdflatex 2026.9.7)  7 SEP 2026 19:19
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -346,16 +346,52 @@ Package: titlesec 2025/01/04 v2.17 Sectioning titles
 \titlewidth=\dimen190
 \titlewidthlast=\dimen191
 \titlewidthfirst=\dimen192
+) (C:\Users\Lenovo\AppData\Local\Programs\MiKTeX\tex/latex/tocloft\tocloft.sty
+Package: tocloft 2026-08-21 v3.0b parameterised ToC, etc., typesetting
+Package tocloft Info: The document has section divisions on input line 64.
+\cftparskip=\skip57
+\cftbeforetoctitleskip=\skip58
+\cftaftertoctitleskip=\skip59
+\cftbeforepartskip=\skip60
+\cftpartnumwidth=\skip61
+\cftpartindent=\skip62
+\cftbeforesecskip=\skip63
+\cftsecindent=\skip64
+\cftsecnumwidth=\skip65
+\cftbeforesubsecskip=\skip66
+\cftsubsecindent=\skip67
+\cftsubsecnumwidth=\skip68
+\cftbeforesubsubsecskip=\skip69
+\cftsubsubsecindent=\skip70
+\cftsubsubsecnumwidth=\skip71
+\cftbeforeparaskip=\skip72
+\cftparaindent=\skip73
+\cftparanumwidth=\skip74
+\cftbeforesubparaskip=\skip75
+\cftsubparaindent=\skip76
+\cftsubparanumwidth=\skip77
+\cftbeforeloftitleskip=\skip78
+\cftafterloftitleskip=\skip79
+\cftbeforefigskip=\skip80
+\cftfigindent=\skip81
+\cftfignumwidth=\skip82
+\c@lofdepth=\count318
+\c@lotdepth=\count319
+\cftbeforelottitleskip=\skip83
+\cftafterlottitleskip=\skip84
+\cftbeforetabskip=\skip85
+\cfttabindent=\skip86
+\cfttabnumwidth=\skip87
 )
-Package hyperref Info: Option `colorlinks' set `true' on input line 35.
+Package hyperref Info: Option `colorlinks' set `true' on input line 36.
 ) (C:\Users\Lenovo\AppData\Local\Programs\MiKTeX\tex/latex/bookmark\bookmark.sty
 Package: bookmark 2026-05-21 v1.32 PDF bookmarks (HO)
  (C:\Users\Lenovo\AppData\Local\Programs\MiKTeX\tex/latex/l3kernel\l3backend-pdftex.def
 File: l3backend-pdftex.def 2026-08-10 L3 backend support: PDF output (pdfTeX)
-\l__color_backend_stack_int=\count318
+\l__color_backend_stack_int=\count320
 ) (C:\Users\Lenovo\AppData\Local\Programs\MiKTeX\tex/latex/bookmark\bkm-pdftex.def
 File: bkm-pdftex.def 2026-05-21 v1.32 bookmark driver for pdfTeX (HO)
-\BKM@id=\count319
+\BKM@id=\count321
 ))
 LaTeX Font Info:    Trying to load font information for T1+lmr on input line 7.
  (C:\Users\Lenovo\AppData\Local\Programs\MiKTeX\tex/latex/lm\t1lmr.fd
@@ -425,16 +461,16 @@ LaTeX Info: Redefining \% on input line 7.
 
 (C:\Users\Lenovo\AppData\Local\Programs\MiKTeX\tex/context/base/mkii\supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count320
+\scratchcounter=\count322
 \scratchdimen=\dimen193
 \scratchbox=\box56
-\nofMPsegments=\count321
-\nofMParguments=\count322
+\nofMPsegments=\count323
+\nofMParguments=\count324
 \everyMPshowfont=\toks28
-\MPscratchCnt=\count323
+\MPscratchCnt=\count325
 \MPscratchDim=\dimen194
-\MPnumerator=\count324
-\makeMPintoPDFobject=\count325
+\MPnumerator=\count326
+\makeMPintoPDFobject=\count327
 \everyMPtoPDFconversion=\toks29
 ) (C:\Users\Lenovo\AppData\Local\Programs\MiKTeX\tex/latex/epstopdf-pkg\epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
@@ -493,7 +529,7 @@ LaTeX Info: Redefining \% on input line 1.
 pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has been already used, duplicate ignored
 <to be read again> 
                    \relax 
-l.14 \newpage
+l.18 \newpage
               [1] (capitulos/1intro_y_arquitectura.tex) (capitulos/2Interaccion_natural_y_UX.tex) (capitulos/3Configuracion_y_seguridad_BD.tex
 Overfull \hbox (3.1944pt too wide) in paragraph at lines 12--13
 []\T1/lmr/bx/n/12 Convención de sig-nos: \T1/lmr/m/n/12 Di-se-ña-mos un es-que-ma muy lim-pio con dos ta-blas (\T1/lmtt/m/n/12 cliente
@@ -509,15 +545,15 @@ L3 programming layer <2026-08-10>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 12933 strings out of 467441
- 208973 string characters out of 5407126
- 644279 words of memory out of 5000000
- 42015 multiletter control sequences out of 15000+600000
+ 13244 strings out of 467441
+ 213866 string characters out of 5407126
+ 653823 words of memory out of 5000000
+ 42322 multiletter control sequences out of 15000+600000
  668408 words of font info for 62 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  79i,6n,82p,977b,581s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmbx12.pfb><C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr12.pfb><C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmri12.pfb><C:/Users/Lenovo/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmtt12.pfb>
-Output written on main.pdf (5 pages, 235842 bytes).
+Output written on main.pdf (5 pages, 235779 bytes).
 PDF statistics:
  168 PDF objects out of 1000 (max. 8388607)
  27 named destinations out of 1000 (max. 500000)

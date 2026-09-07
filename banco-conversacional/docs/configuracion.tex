@@ -15,6 +15,7 @@
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{titlesec}
+\usepackage{tocloft}
 
 % -------------------------------------------------
 % COLORES
@@ -50,10 +51,24 @@
     {\textcolor{darkgray}{\Large\textbf{UNICAJA}}}
 }
 
+
+\renewcommand{\cfttoctitlefont}{\Large\bfseries\color{ugrred}}
 % -------------------------------------------------
 % ESTILO DE TÍTULOS
 % -------------------------------------------------
 
+\usepackage{titlesec}
+\usepackage{tocloft}
+
+% Colores
+\definecolor{ugrred}{RGB}{150,0,24}
+\definecolor{subsectionblue}{RGB}{30,70,110}
+
+% -------------------------------------------------
+% TÍTULOS DEL DOCUMENTO
+% -------------------------------------------------
+
+% Secciones
 \titleformat{\section}
   {\Large\bfseries\color{ugrred}}
   {\thesection.}
@@ -68,8 +83,9 @@
   {0.6em}
   {}
 
+% Subsubsecciones
 \titleformat{\subsubsection}
-  {\normalsize\bfseries\color{darkgray}}
+  {\normalsize\bfseries\color{black}}
   {\thesubsubsection.}
   {0.6em}
   {}
@@ -83,3 +99,20 @@
 
 \titlespacing*{\subsubsection}
   {0pt}{2.5ex plus .5ex minus .2ex}{1ex}
+
+% -------------------------------------------------
+% ESTILO DEL ÍNDICE
+% -------------------------------------------------
+
+% Título del índice
+\renewcommand{\contentsname}{Índice}
+
+% Entradas del índice en negro
+\renewcommand{\cftsecfont}{\color{black}\bfseries}
+\renewcommand{\cftsecpagefont}{\color{black}\bfseries}
+
+\renewcommand{\cftsubsecfont}{\color{black}}
+\renewcommand{\cftsubsecpagefont}{\color{black}}
+
+\renewcommand{\cftsubsubsecfont}{\color{black}}
+\renewcommand{\cftsubsubsecpagefont}{\color{black}}
