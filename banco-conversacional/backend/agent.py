@@ -33,6 +33,7 @@ PROVIDER_BASE_URLS = {
     "ollama": "http://localhost:11434/v1",
     "vllm": os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1"),
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "groq": "https://api.groq.com/openai/v1",
 }
 
 PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()

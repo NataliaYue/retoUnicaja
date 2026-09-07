@@ -818,15 +818,13 @@ function manejarEvento(ev){
           const valorBruto = fila[col.campo] ?? '';
           const valorTexto = formatearCelda(valorBruto, col.formato);
           
-          if (i === 0 && col.formato !== 'euros' && col.formato !== 'numero' && valorTexto) {
-            const dominio = String(valorTexto).toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
-            const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(valorTexto)}&background=0E6B4F&color=fff&rounded=true`;
-            
+          // Si es la primera columna y no es numérica, inyectamos el favicon automáticamente
+         // AHORA (solo pone el logo si la columna es explícitamente el comercio o el nombre)
+          if ((col.campo === 'comercio' || col.campo === 'nombre') && col.formato !== 'euros' && col.formato !== 'numero' && valorTexto) {
+            let faviconHtml = obtenerFaviconComercio(valorTexto);
             td.innerHTML = `
               <div style="display: flex; align-items: center; gap: 8px;">
-                <img src="https://logo.clearbit.com/${dominio}" 
-                     onerror="this.src='${fallback}'" 
-                     style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0;">
+                ${faviconHtml}
                 <span>${valorTexto}</span>
               </div>
             `;
@@ -1167,7 +1165,67 @@ document.addEventListener('keyup', (e) => {
   }
 });
 
+function obtenerFaviconComercio(comercio) {
+    if (!comercio) return "";
+    
+    let textoLimpio = comercio.toLowerCase().trim();
+    
+    // Avatar corporativo con iniciales (respaldo infalible)
+    let avatarIniciales = `https://ui-avatars.com/api/?name=${encodeURIComponent(comercio)}&background=0E6B4F&color=fff&rounded=true&size=32`;
 
+    // Excepciones directas para marcas que fallen con Google Favicons
+    if (textoLimpio.includes("emasagra") || textoLimpio.includes("bp") || textoLimpio.includes("cepsa")) {
+        return `<img src="${avatarIniciales}" width="16" height="16" style="vertical-align: middle; margin-right: 8px; border-radius: 50%;">`;
+    }
+
+    // Diccionario con dominios web oficiales y las nuevas incorporaciones
+    const dominiosFiables = {
+        "netflix": "netflix.com",
+        "spotify": "spotify.com",
+        "endesa": "endesa.com",
+        "digi": "digimobil.es",
+        "mercadona": "mercadona.es",
+        "carrefour": "carrefour.es",
+        "lidl": "lidl.es",
+        "dia": "dia.es",
+        "alcampo": "alcampo.es",
+        "repsol": "repsol.com",
+        "shell": "shell.com",
+        "galp": "galp.com",
+        "zara": "zara.com",
+        "decathlon": "decathlon.es",
+        "primark": "primark.com",
+        "amazon": "amazon.es",
+        "steam": "steampowered.com",
+        "fnac": "fnac.es",
+        "renfe": "renfe.com",
+        "uber": "uber.com",
+        "cabify": "cabify.com",
+        "línea directa": "lineadirecta.com",
+        // Nuevas empresas añadidas
+        "kinépolis": "kinepolis.es",
+        "kinepolis": "kinepolis.es",
+        "100 montaditos": "100montaditos.com",
+        "pull&bear": "pullandbear.com",
+        "pull and bear": "pullandbear.com",
+        "telepizza": "telepizza.es",
+        "tagliatella": "latagliatella.es"
+    };
+
+    let dominio = null;
+    for (const [key, value] of Object.entries(dominiosFiables)) {
+        if (textoLimpio.includes(key)) {
+            dominio = value;
+            break;
+        }
+    }
+
+    if (dominio) {
+        return `<img src="https://www.google.com/s2/favicons?domain=${dominio}&sz=32" width="16" height="16" style="vertical-align: middle; margin-right: 8px; border-radius: 2px;" onerror="this.src='${avatarIniciales}'">`;
+    } else {
+        return `<img src="${avatarIniciales}" width="16" height="16" style="vertical-align: middle; margin-right: 8px; border-radius: 50%;">`;
+    }
+}
 </script>
 </body>
 </html>
