@@ -14,11 +14,11 @@
 
 <style>
   :root{
-    --fondo:#EFF3EF;          /* verde-gris muy claro */
+    --fondo:#EFF3EF;          
     --superficie:#FFFFFF;
     --tinta:#17211B;
     --tinta-suave:#5C6B61;
-    --verde:#0E6B4F;          /* acento principal (banca) */
+    --verde:#0E6B4F;          
     --verde-claro:#E3EFE9;
     --rojo:#B3402A;
     --linea:#DDE4DE;
@@ -268,7 +268,7 @@
     color: var(--tinta); /* Asegura que el texto escrito use el color de tinta actual */
   }
   .entrada input::placeholder{
-    color: var(--tinta-suave); /* Adapta también el texto de ayuda (placeholder) */
+    color: var(--tinta-suave); /* Adapta también el texto de ayuda */
   }
   .entrada button{
     border:none; border-radius:999px; width:42px; height:42px; cursor:pointer;
@@ -819,7 +819,7 @@ function manejarEvento(ev){
           const valorTexto = formatearCelda(valorBruto, col.formato);
           
           // Si es la primera columna y no es numérica, inyectamos el favicon automáticamente
-         // AHORA (solo pone el logo si la columna es explícitamente el comercio o el nombre)
+         // solo pone el logo si la columna es explícitamente el comercio o el nombre)
           if ((col.campo === 'comercio' || col.campo === 'nombre') && col.formato !== 'euros' && col.formato !== 'numero' && valorTexto) {
             let faviconHtml = obtenerFaviconComercio(valorTexto);
             td.innerHTML = `

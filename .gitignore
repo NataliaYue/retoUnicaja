@@ -1,1 +1,13 @@
 .venv/
+__pycache__/
+
+# Auxiliares de LaTeX: se regeneran en cada compilación, así que versionarlos
+# provoca un conflicto cada vez que dos personas compilan la memoria.
+# main.pdf SÍ se versiona, para poder leerlo desde GitHub sin compilar.
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
