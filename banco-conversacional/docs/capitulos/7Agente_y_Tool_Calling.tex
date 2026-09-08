@@ -1,1 +1,78 @@
 \section{Motor Visual Generativo}
+
+\subsection{Generative UI y separación de responsabilidades}
+
+El asistente puede complementar las respuestas de texto con componentes
+visuales generados a partir de los datos obtenidos en las consultas. Para ello,
+se utiliza un enfoque de \textit{Generative UI}, en el que la estructura del
+componente visual se determina en función de la información disponible.
+
+La generación de una visualización completa por parte del modelo de lenguaje,
+incluyendo tanto su estructura como los datos, presenta algunos inconvenientes.
+Por un lado, aumenta la cantidad de información que debe procesar el modelo y,
+por tanto, el tiempo necesario para generar la respuesta. Por otro, permitir
+que el modelo reproduzca directamente los valores obtenidos de la base de datos
+puede introducir errores en los datos mostrados.
+
+Para evitar estos problemas, el motor visual, implementado en
+\texttt{graficos.py}, separa la definición de la visualización de los datos que
+se muestran:
+
+\begin{itemize}
+
+    \item \textbf{Decisión de viabilidad:} después de ejecutar una consulta SQL,
+    el backend analiza el resultado para determinar si puede representarse
+    mediante un componente visual. Por ejemplo, se puede considerar
+    representable un resultado con varias filas y columnas numéricas, o una
+    fila que contenga varias métricas que puedan compararse.
+
+    \item \textbf{Diseño de la visualización:} cuando el resultado es apto para
+    su representación, se realiza una llamada independiente al modelo de
+    lenguaje. En esta llamada se proporcionan los nombres de las columnas y
+    una muestra reducida de los datos. El modelo utiliza esta información junto
+    con el contexto de la consulta para determinar si resulta más apropiado
+    utilizar una tabla o un gráfico y generar la estructura correspondiente.
+    La respuesta incluye también el campo \texttt{razonamiento}, que indica el
+    motivo de la elección.
+
+    \item \textbf{Inyección de los datos:} el modelo no genera los valores que
+    se muestran finalmente al usuario. Devuelve únicamente la estructura del
+    componente visual. El backend incorpora posteriormente los datos reales
+    obtenidos de la base de datos antes de enviar el componente al frontend
+    mediante WebSocket.
+
+\end{itemize}
+
+Esta separación permite que el modelo se encargue de determinar cómo representar
+la información, mientras que los datos mostrados proceden directamente de la
+consulta realizada por el backend.
+
+\subsection{Gráficos Vega-Lite y tablas dinámicas sin plantillas}
+
+El sistema no utiliza una colección fija de plantillas para representar los
+resultados. En su lugar, el modelo de lenguaje genera la estructura del
+componente a partir del tipo de información obtenida y de la consulta realizada.
+
+\begin{itemize}
+
+    \item \textbf{Gráficos con Vega-Lite v5:} cuando los datos se pueden
+    representar de forma más adecuada mediante una visualización, el modelo
+    genera una especificación JSON compatible con Vega-Lite. En ella determina
+    el tipo de marca utilizado mediante \texttt{mark}, como líneas, barras o
+    áreas, y establece la correspondencia entre las columnas y los diferentes
+    elementos del gráfico mediante \texttt{encoding}. También puede definir
+    los títulos y etiquetas que se muestran en la interfaz.
+
+    \item \textbf{Tablas dinámicas:} cuando resulta más importante consultar
+    valores concretos o cuando los resultados contienen varios atributos, el
+    modelo puede seleccionar una representación mediante tabla. En este caso,
+    determina qué columnas deben mostrarse y en qué orden, además de asignar
+    reglas de formato mediante etiquetas como ``euros'', ``fecha'' o ``texto''.
+    El frontend utiliza esta información para representar cada columna con el
+    formato correspondiente.
+
+\end{itemize}
+
+De esta forma, la representación visual se genera a partir de los resultados
+concretos de cada consulta, sin necesidad de definir previamente una plantilla
+específica para cada tipo de pregunta.

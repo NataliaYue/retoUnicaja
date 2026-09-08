@@ -1,3 +1,88 @@
 \section{Operaciones Bancarias Seguras}
+
 \subsection{Atajos de latencia}
+
+Durante las pruebas se observó que algunas consultas frecuentes no requieren
+utilizar el modelo de lenguaje. Un ejemplo es la consulta sobre el saldo
+actual, que puede resolverse directamente desde el backend. Enviar este tipo
+de petición al LLM añadía aproximadamente 3 segundos al tiempo de respuesta
+sin aportar ninguna ventaja en este caso.
+
+Para evitar este procesamiento innecesario, el backend, en
+\texttt{agent.py}, incorpora la función \texttt{es\_consulta\_saldo}, que
+permite identificar las consultas que solicitan únicamente el saldo actual.
+Cuando se cumple esta condición, la petición se resuelve directamente mediante
+la herramienta \texttt{consultar\_saldo}, sin pasar por el modelo de lenguaje.
+
+El filtro utiliza listas cerradas de palabras permitidas mediante
+\texttt{\_RELLENO\_SALDO}. Se ha optado por un criterio restrictivo para evitar
+que consultas que requieran información adicional sean identificadas
+incorrectamente como una consulta de saldo.
+
+En este caso, los errores tienen distinto coste:
+
+\begin{itemize}
+    \item \textbf{Falso negativo:} si una consulta sencilla no es identificada
+    por el filtro, se envía al modelo de lenguaje. El sistema puede utilizar
+    igualmente la herramienta \texttt{consultar\_saldo}, aunque la respuesta
+    tendrá una latencia mayor.
+
+    \item \textbf{Falso positivo:} si una consulta más compleja se identifica
+    incorrectamente como una consulta de saldo, el sistema podría devolver
+    únicamente el saldo actual. Por ejemplo, una pregunta como ``¿cuál era mi
+    saldo el mes pasado?'' requiere consultar información histórica y no debe
+    resolverse mediante este atajo.
+\end{itemize}
+
+Por este motivo, el filtro prioriza evitar los falsos positivos, de forma que
+las consultas que puedan requerir un tratamiento adicional continúen su flujo
+normal hacia el modelo de lenguaje.
+
 \subsection{Flujo transaccional de Bizum}
+
+Las operaciones de envío de dinero se gestionan directamente desde el backend,
+sin delegar su ejecución en el modelo de lenguaje. El flujo se divide en varias
+etapas de validación y ejecución:
+
+\begin{enumerate}
+
+    \item \textbf{Extracción y validación inicial:} la función
+    \texttt{extraer\_peticion\_bizum} identifica en la petición del usuario los
+    datos necesarios para realizar el envío, como el destinatario, el importe
+    y el concepto. La extracción permite reconocer diferentes formas de
+    expresar una misma operación. Antes de continuar con el proceso, el
+    importe se comprueba para verificar que se encuentra dentro de los límites
+    establecidos, entre 0,50€ y 1000€.
+
+    \item \textbf{Resolución del contacto:} una vez obtenido el destinatario,
+    la función \texttt{buscar\_contacto\_bizum} comprueba los contactos
+    disponibles. En caso de que el nombre proporcionado no coincida
+    exactamente, se utilizan coincidencias parciales mediante
+    \texttt{get\_close\_matches} para identificar posibles contactos. Si existe
+    una coincidencia, esta se muestra al usuario antes de continuar con la
+    operación.
+
+    \item \textbf{Autenticación desde el frontend:} cuando los datos de la
+    operación son válidos, el estado de la conversación pasa a ``Bizum
+    pendiente'' y el backend envía mediante WebSocket la señal
+    \texttt{pedir\_pin}. El frontend muestra entonces un teclado numérico para
+    introducir el PIN. De esta forma, el PIN se introduce fuera del campo de
+    texto de la conversación y no forma parte del historial que recibe el
+    modelo de lenguaje.
+
+    \item \textbf{Validación y ejecución de la operación:} una vez validado el
+    PIN, el backend ejecuta la función \texttt{api\_enviar\_bizum}. La
+    modificación del saldo se realiza dentro de una transacción SQLite
+    iniciada mediante \texttt{BEGIN IMMEDIATE}, utilizando
+    \texttt{transaccion\_escritura}. Esta instrucción establece el bloqueo
+    necesario para evitar que dos operaciones de escritura se ejecuten
+    simultáneamente sobre los mismos datos. De esta forma, la comprobación del
+    saldo y su posterior actualización se realizan dentro de la misma
+    transacción.
+
+\end{enumerate}
+
+Este diseño mantiene separadas la interpretación de la petición y la ejecución
+de la operación bancaria. El modelo de lenguaje puede identificar la intención
+del usuario y proporcionar los datos necesarios, pero las validaciones y la
+modificación de los datos se realizan mediante la lógica del backend.

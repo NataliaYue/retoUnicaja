@@ -1,4 +1,55 @@
 \section{Interacción Natural y Experiencia de Usuario (UX)}
+
 \subsection{Integración de voz y texto}
+
 \subsection{Generación de respuestas en streaming}
+
+Las respuestas del asistente se transmiten de forma progresiva mediante una
+conexión WebSocket entre el \textit{frontend} y el \textit{backend}. De esta
+forma, el usuario no tiene que esperar a que se genere la respuesta completa
+para empezar a visualizarla, sino que recibe el contenido a medida que está
+disponible.
+
+El uso de WebSockets permite mantener una comunicación continua entre el
+cliente y el servidor y enviar distintos tipos de información durante una
+misma interacción. Además del texto de la respuesta, por este canal pueden
+transmitirse actualizaciones relacionadas con los datos mostrados en pantalla,
+como cambios en el saldo o instrucciones para representar tablas y gráficos.
+
+Esta estrategia reduce el tiempo de espera percibido y permite que la interfaz
+comience a mostrar información mientras el procesamiento de la consulta
+continúa en segundo plano. De esta forma, la generación de la respuesta y la
+actualización de los distintos elementos de la interfaz pueden realizarse de
+forma progresiva.
+
 \subsection{Interfaz adaptativa y accesible}
+
+La interfaz se adapta al tipo de información que se obtiene en cada consulta.
+Además de las respuestas en texto, el sistema puede mostrar tablas y gráficos
+cuando estos aportan información adicional al usuario. Por ejemplo, una
+consulta sobre la evolución de los gastos puede complementarse con una
+representación gráfica de los datos obtenidos.
+
+La generación de estos elementos visuales se ha separado del proceso principal
+de generación de la respuesta para evitar que afecte innecesariamente al tiempo
+de respuesta. Para controlar esta decisión se utiliza la variable
+\texttt{VISUALES\_AL\_LLM}, que permite configurar si la decisión de utilizar
+una herramienta visual se delega en el modelo de lenguaje o se realiza
+directamente desde el backend.
+
+Durante las pruebas se observó que, cuando el modelo de lenguaje podía decidir
+libremente cuándo utilizar las herramientas de generación de gráficos, la
+respuesta podía verse interrumpida para realizar dicha operación. Esto
+incrementaba la latencia hasta alcanzar aproximadamente 12,4 segundos.
+
+Para evitar este comportamiento, en la configuración actual las herramientas
+visuales no se exponen al modelo principal. En su lugar, el backend determina
+de forma determinista, a partir de los datos obtenidos, si es necesario generar
+una tabla o un gráfico. Cuando corresponde, esta generación se ejecuta de forma
+paralela a la respuesta de texto, de manera que ambas tareas no tengan que
+esperarse entre sí.
+
+Con este cambio, el tiempo de respuesta se redujo hasta aproximadamente
+6,7 segundos. Además de mejorar la latencia, esta separación permite mantener
+independientes la generación de la respuesta y la representación visual de los
+datos.

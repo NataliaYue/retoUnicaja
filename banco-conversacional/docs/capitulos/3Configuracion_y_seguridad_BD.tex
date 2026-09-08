@@ -1,22 +1,78 @@
 \section{Configuración, Generación y Seguridad de la Base de Datos}
 
-Para poner a prueba un asistente financiero inteligente, no basta con tener un buen modelo de lenguaje; necesitamos un escenario de datos rico, realista y, sobre todo, un entorno de ejecución completamente seguro. Por ello, el diseño de la base de datos se ha abordado desde dos frentes: la simulación de la vida financiera del usuario y la protección de su información.
+\subsection{Generación de un histórico realista}
 
-\subsection{Una simulación realista y reproducible}
-Aunque el enunciado del reto sugería el uso de un LLM para la generación masiva de datos, decidimos tomar un camino más controlado. Implementamos un generador determinista en Python (fijando una semilla de aleatoriedad) y limitamos el uso de la IA a la redacción del catálogo de comercios. Esta decisión nos dio una ventaja crucial: una base de datos 100\% reproducible. Esto es indispensable no solo para depurar el código sin que los datos cambien constantemente, sino para poder grabar una demostración en vídeo sólida y predecible.
+Para realizar las pruebas del asistente es necesario disponer de un conjunto de
+datos que permita representar diferentes situaciones financieras. Para ello, el
+proyecto incluye un script de generación sintética, \texttt{seed.py}, que crea
+un histórico de operaciones correspondiente a un periodo de 24 meses.
 
-Para enriquecer este entorno, aplicamos las siguientes estrategias en la generación de datos:
+El generador utiliza una semilla determinista mediante
+\texttt{random.seed(42)}, lo que permite obtener siempre los mismos datos a
+partir de una misma configuración. Esto facilita tanto el desarrollo como la
+repetición de las pruebas, ya que los resultados se pueden comparar sobre un
+conjunto de datos conocido.
+
+Los datos generados no se limitan a operaciones aleatorias, sino que incluyen
+diferentes tipos de movimientos y patrones que permiten probar las consultas
+del asistente. Entre ellos se encuentran:
+
 \begin{itemize}
-    \item \textbf{Histórico extendido de 24 meses:} Si generábamos solo un año de datos, un pago anual como el seguro del coche aparecería una única vez, haciendo matemáticamente imposible que el sistema detectara la recurrencia. Al ampliar la ventana a dos años, garantizamos que el asistente pueda responder a preguntas como \textit{``¿cuándo pagué el seguro del coche?''}.
-    \item \textbf{Patrones ocultos e inyección de ruido:} No queríamos ponérselo fácil a nuestro motor analítico. Intercalamos recibos mensuales exactos (alquiler), pagos bimestrales (agua) y gastos recurrentes de importe variable (luz). Además, programamos subidas de precio simuladas (como un incremento en la cuota de Netflix a mitad del histórico) para que el asistente realmente tuviera que esforzarse en detectar estos cambios entre todo el ``ruido'' de compras diarias en supermercados o gasolineras.
-    \item \textbf{Convención de signos:} Diseñamos un esquema muy limpio con dos tablas (\texttt{cliente} y \texttt{movimientos}). Almacenar todos los gastos en negativo y los ingresos en positivo resultó ser un ``truco'' excelente para simplificar la vida del LLM, ya que le permite filtrar gastos en sus consultas SQL simplemente añadiendo la condición \texttt{importe < 0}.
+    \item \textbf{Gastos periódicos y variables:} se generan recibos con
+    distintas periodicidades, como pagos mensuales o bimestrales, junto con
+    gastos variables relacionados con categorías como supermercado o
+    combustible.
+
+    \item \textbf{Pagos con periodicidad anual:} se incluyen operaciones
+    separadas por periodos de tiempo más amplios, como la renovación anual del
+    seguro del coche. Esto permite comprobar el funcionamiento de las consultas
+    que requieren aplicar filtros sobre periodos de tiempo extensos.
+
+    \item \textbf{Cambios en los gastos:} se introducen modificaciones en
+    determinadas operaciones a lo largo del histórico. Por ejemplo, una
+    suscripción puede aumentar su precio a mitad del periodo, permitiendo
+    comprobar si el sistema es capaz de identificar este tipo de variaciones.
 \end{itemize}
 
-\subsection{Seguridad y Defensa en Profundidad (IA Responsable)}
-Dar a un modelo de lenguaje la capacidad de escribir código SQL sobre una base de datos real requiere medidas de seguridad estrictas. Para cumplir con los principios de una IA Responsable, hemos implementado un patrón de ``defensa en profundidad'':
+De esta forma, la base de datos proporciona un conjunto de pruebas más variado
+que permite comprobar tanto consultas sencillas como aquellas que requieren
+analizar información de diferentes periodos.
+
+\subsection{Defensa en profundidad y aislamiento del LLM}
+
+Una parte importante del sistema es controlar el acceso del modelo de lenguaje
+a la base de datos. El modelo puede generar consultas para obtener información
+a partir de las peticiones realizadas por el usuario, por lo que es necesario
+evitar que dichas consultas puedan modificar los datos almacenados.
+
+Para ello, el acceso a la base de datos, implementado en
+\texttt{database.py}, incorpora varias medidas de protección independientes:
 
 \begin{itemize}
-    \item \textbf{Aislamiento en modo lectura:} Cualquier consulta SQL que el asistente genere para responder dudas del usuario (el flujo \textit{Text-to-SQL}) se ejecuta en una conexión a la base de datos configurada estrictamente como solo lectura (\texttt{mode=ro}). Si el LLM tiene una alucinación e intenta modificar algo, el propio motor de la base de datos lo bloquea físicamente.
-    \item \textbf{Filtros y protección de contexto:} Antes de ejecutar el código del LLM, pasamos la consulta por una lista negra que bloquea palabras como INSERT, UPDATE o DROP. Además, limitamos drásticamente el número de filas que la base de datos puede devolver (50 filas máximo) para evitar desbordar la memoria del modelo y mantener una respuesta ágil.
-    \item \textbf{Transaccionalidad para operaciones reales:} Cuando el usuario pide hacer una operación real, como enviar un Bizum, el sistema cambia las reglas. Estas acciones nunca utilizan SQL generado por la IA. En su lugar, el backend toma el control utilizando consultas parametrizadas seguras y bloques transaccionales estrictos (\texttt{BEGIN IMMEDIATE}) para evitar condiciones de carrera, asegurando que el dinero y el saldo se muevan siempre de forma exacta y coherente.
+
+    \item \textbf{Acceso de solo lectura:} cuando el modelo necesita consultar
+    información del historial, el backend utiliza una conexión SQLite en modo
+    solo lectura mediante \texttt{mode=ro}. De esta forma, las operaciones que
+    intenten modificar la base de datos, como \texttt{DROP} o \texttt{UPDATE},
+    son rechazadas por el propio motor de SQLite.
+
+    \item \textbf{Validación de las consultas:} antes de ejecutar una consulta
+    generada por el modelo, el sistema comprueba su contenido mediante una serie
+    de expresiones regulares. Se bloquean palabras clave asociadas a operaciones
+    de modificación de datos o de la estructura de la base de datos, como
+    \texttt{INSERT}, \texttt{DELETE} o \texttt{ALTER}. Además, se comprueba que
+    la consulta comience por \texttt{SELECT} o \texttt{WITH}.
+
+    \item \textbf{Limitación del número de resultados:} las consultas que
+    devuelven un número elevado de registros pueden generar una cantidad de
+    información innecesaria para el modelo. Para evitarlo, el sistema establece
+    un límite de 50 filas mediante la constante \texttt{MAX\_FILAS = 50}.
+    Cuando una consulta devuelve más resultados, estos se truncan antes de
+    incorporarse al contexto de la conversación.
+    
 \end{itemize}
+
+Estas medidas permiten separar la generación de las consultas de su ejecución.
+El modelo de lenguaje se encarga de construir la consulta a partir de la
+petición del usuario, mientras que el backend controla qué consultas pueden
+ejecutarse y con qué permisos se accede a la base de datos.

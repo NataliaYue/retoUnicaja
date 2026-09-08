@@ -1,1 +1,80 @@
-\section{Conclusiones y cumplimiento del baremo}
+\section{Conclusiones y Cumplimiento del Baremo}
+
+\subsection{Conclusiones}
+
+El desarrollo de ``Habla con tu dinero'' ha permitido implementar un asistente
+conversacional capaz de consultar información financiera, realizar determinadas
+operaciones y generar representaciones visuales a partir de las peticiones del
+usuario.
+
+Uno de los principales aspectos de la arquitectura es la separación de
+responsabilidades entre el modelo de lenguaje y el código de la aplicación. El
+LLM se utiliza principalmente para interpretar las peticiones, generar
+consultas SQL, seleccionar herramientas y definir la estructura de las
+visualizaciones. Por otro lado, el backend se encarga de realizar los cálculos,
+consultar los datos y ejecutar las operaciones que modifican el estado de la
+aplicación.
+
+Esta separación también se aplica a las operaciones que requieren un mayor
+control, como el envío de Bizums. La validación de los datos, la autenticación
+mediante PIN y la actualización del saldo se realizan fuera del modelo de
+lenguaje y mediante la lógica del backend y las transacciones de la base de
+datos.
+
+Durante el desarrollo también se han realizado diferentes ajustes para reducir
+el tiempo de respuesta. Un ejemplo es la resolución directa de determinadas
+consultas, como la consulta del saldo, y la generación paralela de los
+componentes visuales. En las pruebas realizadas, esta última modificación
+permitió reducir el tiempo de respuesta aproximado de 12,4 segundos a 6,7
+segundos.
+
+En conjunto, el proyecto muestra que es posible utilizar un modelo de lenguaje
+como parte de una aplicación de gestión financiera manteniendo fuera del modelo
+las operaciones que requieren cálculos, validaciones y modificaciones de los
+datos. Esta organización permite aprovechar el procesamiento de lenguaje
+natural sin depender del modelo para las partes críticas de la aplicación.
+
+\subsection{Cumplimiento del baremo técnico del reto}
+
+El desarrollo se ha realizado tomando como referencia los criterios de
+evaluación establecidos para el reto. Las principales funcionalidades
+implementadas son las siguientes:
+
+\begin{itemize}
+
+    \item \textbf{Text-to-SQL (30 puntos):} se ha implementado la traducción de
+    consultas en lenguaje natural a sentencias SQL mediante la herramienta
+    \texttt{consultar\_movimientos}. El esquema de la base de datos se incorpora
+    al \textit{System Prompt} y el sistema permite corregir determinadas
+    consultas cuando se produce un error durante su ejecución. Las consultas
+    sobre el histórico se realizan mediante una conexión SQLite de solo lectura
+    (\texttt{mode=ro}) y se aplican validaciones adicionales antes de ejecutarlas.
+
+    \item \textbf{Operaciones Bancarias (10 puntos):} el asistente permite
+    realizar operaciones como la consulta del saldo y el envío de dinero
+    mediante Bizum. El flujo de Bizum incluye la extracción y validación del
+    importe, la resolución del destinatario, la introducción del PIN desde el
+    frontend y la ejecución de la operación mediante una transacción SQLite
+    iniciada con \texttt{BEGIN IMMEDIATE}.
+
+    \item \textbf{Gráficos sin plantillas (10 puntos):} las visualizaciones se
+    generan a partir de los resultados concretos de cada consulta, sin utilizar
+    una plantilla fija para cada caso. El modelo genera especificaciones
+    compatibles con Vega-Lite v5 y determina elementos como el tipo de gráfico,
+    los ejes y los títulos.
+
+    \item \textbf{Lógica visual (10 puntos):} el backend analiza inicialmente
+    si los resultados obtenidos son adecuados para una representación visual.
+    Cuando lo son, el modelo determina si la información debe mostrarse como
+    tabla o como gráfico y genera la estructura correspondiente. La decisión
+    incluye el campo \texttt{razonamiento}, utilizado para indicar el motivo de
+    la elección.
+
+    \item \textbf{Analítica avanzada (extra):} se han implementado
+    funcionalidades adicionales para analizar los movimientos del usuario,
+    como la detección de pagos recurrentes y la proyección del gasto mensual.
+    Estos cálculos se realizan en Python mediante reglas y métodos estadísticos,
+    mientras que el modelo de lenguaje se utiliza para interpretar la consulta
+    y presentar los resultados.
+
+\end{itemize}

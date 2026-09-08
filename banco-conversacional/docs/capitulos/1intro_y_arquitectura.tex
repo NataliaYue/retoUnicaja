@@ -1,3 +1,57 @@
 \section{Introducción y arquitectura general}
+
 \subsection{Objetivos y enfoque de la solución}
+
+El proyecto ``Habla con tu dinero'' es un asistente conversacional desarrollado
+como respuesta al reto propuesto por la Cátedra de Inteligencia Artificial de la
+Universidad de Granada y Unicaja. Su objetivo principal es ofrecer al usuario
+una forma sencilla e interactiva de consultar y gestionar información
+relacionada con sus finanzas. Para ello, permite realizar consultas sobre
+cuentas, movimientos y productos financieros, además de ejecutar determinadas
+operaciones.
+
+Para garantizar un funcionamiento fiable, se ha separado la interpretación de
+las consultas de la ejecución de las operaciones. El modelo de lenguaje se
+utiliza para interpretar las peticiones realizadas en lenguaje natural,
+identificar la intención del usuario y determinar qué información es necesaria
+para responder. Los cálculos, las consultas sobre los datos y las operaciones
+financieras se realizan directamente mediante la lógica de la aplicación.
+
+Esta separación permite controlar mejor el funcionamiento del sistema. Mientras
+que el modelo de lenguaje facilita la interacción con el usuario, el backend
+se encarga de obtener los datos, realizar los cálculos y ejecutar las
+operaciones correspondientes. De esta manera, las respuestas relacionadas con
+información financiera se basan siempre en los datos disponibles en la
+aplicación.
+
 \subsection{Arquitectura técnica}
+
+La aplicación se divide en tres bloques principales: la interfaz de usuario,
+el backend y la base de datos.
+
+\begin{itemize}
+
+    \item \textbf{Interfaz de usuario (Frontend):} Se ha desarrollado utilizando
+    HTML y JavaScript, sin recurrir a frameworks complejos. La comunicación con
+    el servidor se realiza mediante WebSockets, manteniendo una conexión abierta
+    durante la interacción. Esto permite recibir las respuestas de forma
+    progresiva y actualizar la interfaz dinámicamente. Además, se pueden mostrar
+    elementos como gráficos, tablas y mensajes dentro de la propia conversación.
+
+    \item \textbf{Motor principal (Backend):} Se ha desarrollado en Python
+    utilizando FastAPI y constituye el núcleo de la aplicación. Se encarga de
+    recibir las peticiones del usuario, gestionar el contexto de la conversación
+    y coordinar los diferentes componentes del sistema. También permite
+    resolver directamente determinadas consultas sin utilizar el modelo de
+    lenguaje. Por ejemplo, una consulta sobre el saldo de una cuenta puede
+    resolverse directamente desde el backend, reduciendo el tiempo de respuesta.
+
+    \item \textbf{Base de datos y seguridad:} La información de la aplicación
+    se almacena en una base de datos SQLite. El acceso a los datos se gestiona
+    desde el backend, que determina qué operaciones puede realizar cada parte
+    del sistema. Las consultas que únicamente necesitan información utilizan
+    acceso de lectura, mientras que las operaciones que modifican datos o
+    implican movimientos de dinero son ejecutadas directamente por la lógica de
+    la aplicación.
+
+\end{itemize}

@@ -1,3 +1,110 @@
 \section{Consultas y Analítica Avanzada}
+
 \subsection{Traducción del lenguaje natural a SQL para el histórico de movimientos}
-\subsection{Engoque híbrido: heurística y estadística}
+
+Una de las funcionalidades principales del asistente es permitir al usuario
+consultar su historial financiero utilizando lenguaje natural. Para ello, el
+sistema utiliza la técnica de \textit{Text-to-SQL} mediante la herramienta
+\texttt{consultar\_movimientos}. El modelo de lenguaje recibe la petición del
+usuario y genera una consulta en dialecto SQLite que permite obtener la
+información solicitada.
+
+Para facilitar la generación de estas consultas, el \textit{System Prompt}
+incluye una serie de reglas relacionadas con la estructura y el tratamiento de
+los datos:
+
+\begin{itemize}
+
+    \item \textbf{Tratamiento de signos:} los gastos se almacenan con valores
+    negativos y los ingresos con valores positivos. Por este motivo, cuando se
+    necesita calcular el total de gastos, la consulta debe aplicar
+    \texttt{SUM(-importe)} para obtener el resultado como una cantidad positiva
+    en la respuesta.
+
+    \item \textbf{Gestión temporal:} se proporcionan al modelo diferentes
+    patrones para realizar filtros sobre fechas. Esto permite distinguir entre
+    expresiones como ``este mes'' y ``los últimos N meses'', utilizando las
+    funciones de fecha disponibles en SQLite, como \texttt{strftime}.
+
+    \item \textbf{Corrección de consultas:} si una consulta generada por el
+    modelo produce un error durante su ejecución, la capa de acceso a la base
+    de datos devuelve la información del error al agente. El modelo puede
+    utilizar este resultado para corregir la sentencia SQL y volver a
+    intentarlo. El número de reintentos está limitado para evitar ciclos
+    indefinidos.
+
+\end{itemize}
+
+De esta forma, el modelo se utiliza para traducir la petición del usuario a una
+consulta sobre los datos, mientras que la ejecución de la sentencia y la
+gestión de los errores corresponden al backend.
+
+\subsection{Enfoque híbrido: heurística y estadística}
+
+Las consultas analíticas requieren operaciones que no resulta conveniente
+delegar directamente en el modelo de lenguaje. Por ejemplo, la identificación
+de pagos recurrentes o el cálculo de una proyección de gasto implican realizar
+cálculos sobre un conjunto de operaciones y detectar patrones en los datos.
+
+Por este motivo, estas funcionalidades siguen un enfoque híbrido. El módulo
+\texttt{analitica.py} realiza los cálculos y obtiene los resultados a partir de
+los datos almacenados, mientras que el modelo de lenguaje se utiliza
+principalmente para interpretar la petición y redactar posteriormente la
+respuesta.
+
+\subsubsection{Detección de pagos recurrentes y suscripciones}
+
+La periodicidad de un pago no se almacena explícitamente en la base de datos,
+por lo que debe inferirse a partir del histórico de operaciones. El módulo
+\texttt{analitica.py} utiliza para ello la separación temporal entre los
+distintos cobros de un mismo concepto.
+
+En lugar de utilizar únicamente el importe como criterio, el algoritmo analiza
+la regularidad de los intervalos entre pagos. Esto permite identificar pagos
+recurrentes aunque su importe varíe entre periodos, como puede ocurrir con
+recibos de suministros.
+
+El procedimiento utiliza la mediana de los días transcurridos entre pagos y
+calcula su desviación típica. A partir de estos valores se obtiene un factor
+de irregularidad. Cuando este factor es menor o igual que $0.06$ y la mediana
+se encuentra dentro de una cadencia conocida, como mensual, trimestral o
+anual, se considera que existe un patrón recurrente. Para la comparación con
+estas cadencias se utiliza un margen de tolerancia del 20\%.
+
+Este procedimiento permite identificar diferentes tipos de pagos periódicos,
+como suscripciones o seguros anuales. Además, al disponer del histórico
+completo, el sistema puede detectar variaciones en el importe de un mismo pago
+a lo largo del tiempo.
+
+\subsubsection{Proyecciones de gasto y analítica predictiva}
+
+Para estimar el gasto total de un mes no resulta suficiente con extrapolar
+directamente el gasto acumulado hasta el momento. Esta aproximación puede
+producir resultados poco representativos al comienzo del mes, especialmente
+cuando existen pagos fijos que todavía no se han realizado.
+
+El sistema divide la proyección en dos componentes:
+
+\begin{itemize}
+
+    \item \textbf{Gastos fijos:} se identifican a partir de los pagos
+    recurrentes detectados previamente. Su importe se incorpora a la
+    proyección independientemente de que el pago se haya realizado ya durante
+    el mes o esté pendiente.
+
+    \item \textbf{Gastos variables:} se estiman a partir del ritmo de gasto del
+    mes actual y de la media histórica de los últimos 12 meses. El peso de cada
+    componente se modifica en función del número de días transcurridos del mes.
+
+\end{itemize}
+
+Durante el desarrollo se utilizó \textit{backtesting} para comprobar el
+comportamiento de la proyección sobre datos históricos. Este proceso permite
+comparar las estimaciones que habría realizado el sistema con los gastos que
+realmente se produjeron y obtener una medida del error.
+
+Los resultados del análisis se resumen antes de enviarlos al modelo de
+lenguaje. En lugar de proporcionarle únicamente los valores numéricos
+calculados, el backend puede generar conclusiones como ``fiabilidad alta'' o
+``tendencia por encima de la media''. De esta forma, el modelo recibe
+información ya procesada y se encarga principalmente de presentarla al usuario.

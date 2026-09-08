@@ -1,4 +1,81 @@
 \section{Motor de Inteligencia Artificial}
-\subsection{Gestión del historial y prevención de desbordamiento de contexto}
+
+\subsection{Gestión del historial y prevención del desbordamiento de contexto}
+
+El modelo de lenguaje trabaja con una ventana de contexto limitada. En el caso de
+los modelos utilizados en el proyecto, esta ventana puede ser de hasta 8192
+tokens. Parte de este espacio se utiliza para las instrucciones del sistema y
+la definición de las herramientas disponibles. Por tanto, si el historial de
+una conversación crece demasiado, es necesario limitar la cantidad de mensajes
+que se mantienen en el contexto enviado al modelo.
+
+Para gestionar esta situación, la clase \texttt{Agente}, definida en
+\texttt{agent.py}, incorpora la función \texttt{recortar\_historial}. Esta
+función limita el historial a los últimos 24 mensajes, manteniendo siempre el
+primer mensaje de la conversación, que contiene el \textit{System Prompt}.
+
+La eliminación de mensajes tampoco se realiza de forma arbitraria. El algoritmo
+busca el inicio de un turno del usuario (\texttt{role: "user"}) antes de
+recortar el historial. De esta forma, se evita eliminar únicamente una parte de
+una interacción que incluya una llamada a una herramienta y su correspondiente
+respuesta. Mantener estas partes de la conversación en el orden correcto es
+necesario para que los mensajes enviados posteriormente al modelo mantengan una
+estructura válida.
+
+De esta manera, el historial se mantiene dentro de un tamaño controlado sin
+eliminar las instrucciones principales del sistema ni romper la estructura de
+las interacciones realizadas mediante herramientas.
+
 \subsection{System Prompt dinámico y reglas de comportamiento}
+
+El comportamiento del asistente se configura mediante un \textit{System Prompt}
+definido en \texttt{config.py}. En él se establecen las instrucciones que debe
+seguir el modelo, así como la información necesaria para interpretar las
+peticiones y utilizar las herramientas disponibles.
+
+El \textit{prompt} se genera dinámicamente durante el arranque de la aplicación.
+Entre la información que se incorpora se encuentra la fecha actual, obtenida
+mediante \texttt{date.today().isoformat()}. Esto permite proporcionar al modelo
+una referencia temporal concreta para interpretar consultas que utilizan
+expresiones como ``este mes'' o ``la semana pasada''.
+
+También se incorpora el esquema de la base de datos mediante
+\texttt{ESQUEMA\_BD}. De esta forma, el modelo dispone de información sobre las
+tablas y columnas disponibles cuando necesita generar una consulta sobre los
+datos almacenados.
+
+Además, el \textit{System Prompt} establece determinadas reglas para mantener
+un formato de respuesta consistente. Entre ellas se encuentran las indicaciones
+relacionadas con el formato de las cantidades monetarias, el tratamiento del
+usuario de forma directa y las restricciones sobre el uso de Markdown.
+
 \subsection{Uso de Tool Calling unificado}
+
+El asistente utiliza \textit{Tool Calling} para solicitar al backend la
+ejecución de determinadas operaciones. Las herramientas disponibles se definen
+en \texttt{tools.py} mediante esquemas que especifican los argumentos que puede
+utilizar cada una. Entre estas operaciones se encuentran las consultas de
+información, el envío de Bizums y la proyección de gastos.
+
+Para evitar depender de un formato concreto de herramientas, el sistema incluye
+la función \texttt{adaptar\_herramientas\_a\_openai}, que adapta las definiciones
+internas al formato utilizado por las APIs compatibles con el esquema de
+OpenAI. Esto permite utilizar diferentes proveedores o modelos manteniendo la
+misma estructura de herramientas en el backend.
+
+El funcionamiento de una interacción con herramientas sigue varios pasos. En
+primer lugar, el modelo recibe la petición del usuario y determina si necesita
+utilizar alguna de las herramientas disponibles. Si es necesario, genera un
+\textit{tool call} con los argumentos correspondientes en formato JSON.
+
+El backend recibe esta petición y ejecuta la herramienta de forma local. Según
+el tipo de operación, esto puede implicar consultar la base de datos, realizar
+un cálculo o ejecutar una operación definida por la aplicación. Una vez
+obtenido el resultado, el backend lo incorpora a la conversación mediante un
+mensaje con el rol \texttt{tool}.
+
+Finalmente, el modelo recibe el resultado de la herramienta junto con el resto
+del contexto y genera la respuesta que se muestra al usuario. De esta forma,
+el modelo se encarga de interpretar la petición y decidir qué herramienta
+utilizar, mientras que la ejecución de las operaciones se realiza en el
+backend.
