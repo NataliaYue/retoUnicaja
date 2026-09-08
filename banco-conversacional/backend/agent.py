@@ -55,7 +55,8 @@ client = AsyncOpenAI(
     api_key=API_KEY,
 )
 
-# Adaptador por si tus TOOLS actuales siguen el formato input_schema de Anthropic
+# Las tools se declaran en formato Anthropic (name/description/input_schema) y
+# el endpoint de Ollama las espera en formato OpenAI (function/parameters).
 def adaptar_herramientas_a_openai(anthropic_tools):
     openai_tools = []
     for t in anthropic_tools:
@@ -76,14 +77,12 @@ OPENAI_TOOLS = adaptar_herramientas_a_openai(TOOLS)
 
 # Qwen3 activa por defecto un modo "thinking" que multiplica la latencia y
 # consume MAX_TOKENS antes de generar la respuesta. En Ollama se desactiva
-# pasando reasoning_effort="none" por el endpoint OpenAI-compatible.
+# pasando reasoning_effort="none".
 EXTRA_BODY = (
     {"reasoning_effort": "none"}
     if PROVIDER == "ollama" and "qwen3" in MODELO.lower()
     else None
 )
-
-
 
 
 # Expresiones que identifican una pregunta por el saldo.
@@ -96,8 +95,8 @@ _DISPARADORES_SALDO = (
 )
 
 # Palabras que pueden acompañar a una pregunta de saldo sin cambiar lo que
-# pide. Cualquier término fuera de esta lista (un periodo, una categoría, otro
-# verbo) significa que la pregunta no es "¿cuánto tengo ahora?" y debe ir al LLM.
+# pide. Cualquier término fuera de esta lista significa que la pregunta no es 
+# "¿cuánto tengo ahora?" y debe ir al LLM.
 _RELLENO_SALDO = frozenset({
     "a", "actual", "actualmente", "ahora", "banco", "corriente", "cual",
     "cuanta", "cuanto", "cuenta", "dame", "de", "del", "dime", "dinero",
@@ -111,17 +110,7 @@ _RELLENO_SALDO = frozenset({
 def es_consulta_saldo(mensaje: str) -> bool:
     """
     Atajo: las preguntas por el saldo actual se resuelven con una llamada a la
-    API bancaria, sin pasar por el LLM (ahorra ~3 s por pregunta).
-
-    Es deliberadamente estricto, porque los dos errores no cuestan lo mismo:
-    - Un falso negativo solo cuesta latencia. El LLM tiene `consultar_saldo` y
-      el system prompt le obliga a usarla, así que la respuesta sigue siendo
-      correcta.
-    - Un falso positivo responde con el saldo de hoy a una pregunta que pedía
-      otra cosa. Con la comprobación anterior (substring suelto) pasaba con
-      "¿cuál era mi saldo el mes pasado?" (respuesta incorrecta), "muéstrame la
-      evolución de mi saldo este año" (se perdía el gráfico) o "¿cuánto me
-      queda por pagar del alquiler?".
+    API bancaria, sin pasar por el LLM.
     """
     texto = normalizar_texto(mensaje)
     texto = re.sub(r"[^\w\s]", " ", texto)
@@ -145,11 +134,8 @@ def validar_importe_bizum(cantidad: float) -> str | None:
     Devuelve el motivo por el que este importe no se puede enviar, o None si
     es válido.
 
-    Aplica los mismos límites que `api_enviar_bizum`, pero ANTES de dejar el
-    Bizum pendiente. Si solo valida la API, el usuario recorre todo el flujo
-    ("vas a enviar 2.000 € a María López, introduce tu PIN"), teclea su clave
-    y solo entonces se le dice que el importe no era válido: se le ha pedido
-    la clave para una operación que ya se sabía que iba a fallar.
+    Aplica los mismos límites que `api_enviar_bizum`, pero antes de dejar el
+    Bizum pendiente.
 
     La API sigue comprobándolo por su cuenta: es la última palabra antes de
     mover dinero y no debe fiarse de que quien la llama haya validado nada.
@@ -229,10 +215,7 @@ def explicar_error(e: Exception) -> str:
     Traduce una excepción a algo que el usuario pueda leer y accionar.
 
     El caso que importa es que el servidor del modelo no esté levantado: la
-    librería devuelve un escueto "Connection error." y en pantalla salía tal
-    cual, sin ninguna pista de qué hacer. Es el fallo más probable en una demo
-    —y el más desconcertante— porque todo lo demás sigue funcionando: la página
-    carga, el saldo se ve, y solo el chat deja de responder.
+    librería devuelve un escueto "Connection error."
     """
     if isinstance(e, APIConnectionError):
         return (
@@ -272,7 +255,7 @@ def limpiar_markdown_respuesta(texto: str) -> str:
 def extraer_peticion_bizum(mensaje: str) -> dict | None:
     """
     Detecta peticiones de Bizum con distintos órdenes naturales, permitiendo
-    cantidades opcionales y conceptos explícitos (ej. "con concepto cena").
+    cantidades opcionales y conceptos explícitos.
 
     Ejemplos admitidos:
     - Haz un Bizum a María López de 20 euros
@@ -288,17 +271,7 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
 
     patrones = [
         # 1. Haz un Bizum a María López de 20 euros [para la cena]
-        #
-        # Va la PRIMERA a propósito, y las dos cosas que la hacen funcionar son
-        # sutiles:
-        #
-        # - El `\s+` va DENTRO del grupo opcional del concepto. Fuera, exigía un
-        #   espacio detrás del importe aunque no hubiera concepto, así que este
-        #   patrón NO casaba con "…de 20 euros" a secas.
-        # - Y por eso caía en el patrón general de abajo, cuyo marcador de
-        #   concepto acepta un `de` suelto: interpretaba "de 20 euros" como el
-        #   concepto y dejaba la cantidad a cero. Es la forma más natural de
-        #   pedir un Bizum y la que está en el guion de demo del README.
+        #   Es la forma más natural de pedir un Bizum.
         (
             r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
             r"(?:un\s+)?bizum\s+a\s+"
@@ -309,7 +282,7 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
 
         # 2. Caso general: cantidad antes o después del destinatario, con
         #    concepto explícito al final. Cubre "haz un bizum de 20 euros a Ana
-        #    para la cena", que el patrón 1 no alcanza.
+        #    para la cena".
         (
             r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
             r"(?:un\s+)?bizum\s+"
@@ -327,7 +300,7 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
             r"(?:(?:para|de|por|con\s+concepto)\s+(?P<concepto>.+))?$"
         ),
 
-        # 4. Sin cantidad pero con concepto explícito (ej: haz un bizum a María con concepto cena)
+        # 4. Sin cantidad pero con concepto explícito
         (
             r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
             r"(?:un\s+)?bizum\s+a\s+"
@@ -335,7 +308,7 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
             r"(?:con\s+concepto|para|de)\s+(?P<concepto>.+)$"
         ),
 
-        # 5. Envía 20 euros a María López por Bizum (sin concepto)
+        # 5. Envía 20 euros a María López por Bizum sin concepto
         (
             r"^(?:envia|envía|manda|mandar)\s+"
             r"(?P<cantidad>\d+(?:[,.]\d+)?)\s*(?:€|euros?)?\s+a\s+"
@@ -372,7 +345,7 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
             r"(?P<destinatario>[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.]+?)\s+(?:por\s+)?bizum"
         ),
 
-        # 10. Solo destinatario sin cantidad (ej: haz un bizum a María)
+        # 10. Solo destinatario sin cantidad
         (
             r"^(?:haz|hacer|envia|envía|manda|mandar)\s+"
             r"(?:un\s+)?bizum\s+a\s+"
@@ -389,13 +362,13 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
         datos = match.groupdict()
         destinatario = datos.get("destinatario", "").strip()
         
-        # Eliminar una preposición "a" inicial sobrante (ej: "a María" -> "María")
+        # Eliminar una preposición "a" inicial sobrante
         destinatario = re.sub(r"^a\s+", "", destinatario, flags=re.IGNORECASE).strip()
 
         # Limpiamos posibles restos de conectores al final del nombre del destinatario
         destinatario = re.sub(r"\s+(?:de|por|con\s+concepto|concepto|para)$", "", destinatario, flags=re.IGNORECASE).strip()
 
-        # Capturar cantidad (puede venir en 'cantidad', 'cantidad_ini' o 'cantidad_med')
+        # Capturar cantidad
         cantidad_txt = datos.get("cantidad") or datos.get("cantidad_ini") or datos.get("cantidad_med")
         cantidad = 0.0
         if cantidad_txt:
@@ -419,7 +392,7 @@ def extraer_peticion_bizum(mensaje: str) -> dict | None:
 
 def limpiar_razonamiento(texto: str) -> str:
     """
-    Qwen3 puede emitir bloques <think>...</think> (vacíos con /no_think).
+    Qwen3 puede emitir bloques <think>...</think>.
     Se eliminan para que no aparezcan en el chat ni en el TTS.
     """
     return re.sub(r"<think>.*?</think>", "", texto, flags=re.DOTALL).strip()
@@ -562,12 +535,7 @@ class Agente:
         """
         Limita el historial a los últimos turnos, conservando el system prompt.
 
-        Sin esto, una conversación larga (con resultados SQL dentro) desborda
-        los 8192 tokens de contexto. Cuando eso pasa, Ollama trunca por
-        delante, o sea que lo primero que se pierde es el system prompt: el
-        agente deja de saber el esquema de la BD y las reglas de estilo, y
-        empieza a responder peor sin que nada indique por qué.
-
+        Sin esto, una conversación larga desborda los 8192 tokens de contexto.
         El corte no puede caer en cualquier sitio. Un mensaje `tool` sin el
         `assistant` con `tool_calls` que lo provocó deja el historial
         inconsistente y la API lo rechaza, así que se avanza hasta el
@@ -644,10 +612,6 @@ class Agente:
             return True
 
         if es_cancelacion_bizum(mensaje_usuario):
-            # Ojo: aquí el pendiente es la CORRECCIÓN de contacto, no el Bizum.
-            # `self.bizum_pendiente` todavía es None (solo se rellena al aceptar
-            # la sugerencia), y leerlo aquí reventaba con TypeError y tumbaba
-            # la conexión WebSocket entera.
             pendiente = self.correccion_contacto_pendiente
             self.correccion_contacto_pendiente = None
 
@@ -696,7 +660,7 @@ class Agente:
             await self.responder_directo("No hay ningún envío de Bizum pendiente.")
             return
 
-        # PIN simulado (en un entorno real, cruzar con la BD contra un hash).
+        # PIN simulado.
         # Vive en config.py para que no aparezca en el código del agente.
         if pin != PIN_BIZUM:
             self.intentos_pin_restantes -= 1
@@ -767,14 +731,7 @@ class Agente:
         Arranca un envío de Bizum: valida importe, resuelve el contacto y, si
         todo cuadra, lo deja pendiente del PIN.
 
-        Es el ÚNICO sitio donde vive este flujo. Antes estaba escrito dos veces
-        —aquí y en la rama del tool call de `_procesar`— y las dos copias ya
-        habían divergido: la del backend no comprobaba el importe en absoluto,
-        así que un envío de 2.000 € recorría todo el camino y solo fallaba
-        después de que el usuario tecleara su PIN.
-
-        `registrar` es la única diferencia real entre las dos vías. Cuando el
-        origen es un tool call del LLM, toda llamada a herramienta necesita su
+        Cuando el origen es un tool call del LLM, toda llamada a herramienta necesita su
         `tool_result` en el historial antes de añadir nada más, o la API
         rechaza la siguiente petición. Se le pasa una función que anota ese
         resultado; desde el atajo del backend no hace falta y se omite.
@@ -790,17 +747,11 @@ class Agente:
         concepto = (concepto or "").strip()
 
         # El importe va primero, antes de resolver el contacto y antes de pedir
-        # el PIN: si no cabe en los límites no hay operación que confirmar, y
-        # pedir una clave para algo que se sabe que va a fallar es lo peor que
-        # puede hacer aquí.
+        # el PIN: si no cabe en los límites no hay operación que confirmar
         if cantidad <= 0:
             # NO se deja `bizum_pendiente`. Ese estado significa "esperando el
             # PIN", y `gestionar_bizum_pendiente` intercepta con él todos los
-            # turnos siguientes: al responder "20 euros" a la pregunta de abajo,
-            # el usuario recibía "introduce tu PIN o escribe cancela" y la
-            # conversación se quedaba atascada. Aquí no se espera un PIN, se
-            # espera un importe, y de eso ya se encarga el LLM en el turno
-            # siguiente con el historial delante.
+            # turnos siguientes.
             anotar({
                 "estado": "error",
                 "motivo": "Falta la cantidad. Se le ha preguntado al usuario.",
@@ -815,8 +766,7 @@ class Agente:
             return
 
         # Consulta la agenda en la BD: fuera del event loop, como el resto de
-        # accesos a datos (ver la nota de `ejecutar_tool`). `buscar_contacto_bizum`
-        # se queda síncrona para que `tests/test_bizum.py` la siga llamando tal cual.
+        # accesos a datos. `buscar_contacto_bizum` se queda síncrona para que `tests/test_bizum.py` la siga llamando tal cual.
         validacion = await asyncio.to_thread(buscar_contacto_bizum, destinatario_original)
 
         if validacion["estado"] == "no_encontrado":
@@ -913,7 +863,7 @@ class Agente:
             if await self.gestionar_correccion_contacto_pendiente(mensaje_usuario):
                 return
             
-            # 1. PRIMERO comprobamos si estamos esperando la cantidad de un Bizum incompleto
+            # 1. primero comprobamos si estamos esperando la cantidad de un Bizum incompleto
             if self.bizum_pendiente and self.bizum_pendiente.get("cantidad", 0.0) == 0.0:
                 match_cant = re.search(r"(\d+(?:[,.]\d+)?)", mensaje_usuario)
                 if match_cant:
@@ -926,7 +876,7 @@ class Agente:
                     await self.iniciar_bizum(destinatario, cantidad, concepto)
                     return
 
-            # 2. DESPUÉS gestionamos el Bizum pendiente real (esperando PIN o cancelación)
+            # 2. despues gestionamos el Bizum pendiente real (esperando PIN o cancelación)
             if await self.gestionar_bizum_pendiente(mensaje_usuario):
                 return
 

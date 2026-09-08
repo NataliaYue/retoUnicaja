@@ -1,47 +1,29 @@
 """
 Analítica avanzada sobre el histórico de movimientos.
 
-El reto nombra tres tipos de consulta compleja: gastos, comparativas y
-**suscripciones**. Las dos primeras las resuelve el LLM escribiendo SQL. La
-tercera no, porque "¿a qué estoy suscrito?" no es una consulta: es una
-inferencia. Hay que descubrir qué cargos se repiten con regularidad, con qué
+Las suscripciones no son una consulta: son una inferencia. 
+Hay que descubrir qué cargos se repiten con regularidad, con qué
 cadencia, si alguno ha cambiado de precio y si alguno ha dejado de cobrarse.
 Nada de eso está escrito en ninguna columna.
 
 Pedirle esa inferencia a un modelo de 8B en forma de SQL es poco fiable. Aquí
-se hace de forma determinista en Python: el resultado es reproducible, el
-algoritmo se puede explicar en la memoria, y el LLM se limita a redactar la
-conclusión.
+se hace de forma determinista en Python.
 
 CRITERIO DE DETECCIÓN
 ---------------------
-Lo que identifica un pago recurrente no es el importe. Un recibo de la luz
-varía tanto como un repostaje (en los datos actuales, CV de 0,16 frente a
-0,25): el importe no separa una cosa de la otra.
+Lo que identifica un pago recurrente no es el importe, es la **regularidad de 
+los intervalos** entre cargos. Netflix se cobra cada 31 días clavados; en Repsol 
+repostas cuando te toca. Con eso solo no basta, porque la regularidad no significa 
+nada cuando hay pocos cargos.
 
-Lo que sí separa es la **regularidad de los intervalos** entre cargos. Netflix
-se cobra cada 31 días clavados; en Repsol repostas cuando te toca. Midiendo la
-desviación típica de los intervalos dividida entre su mediana:
-
-    Netflix, Spotify, Digi, Gimnasio, Alquiler, Endesa ... 0,03
-    Emasagra (bimestral) .............................. 0,01
-    El más regular de los NO recurrentes ............... 0,12
-    Supermercados, gasolineras, restaurantes .......... 0,25 - 3,34
-
-Con eso solo no basta, porque la regularidad no significa nada cuando hay
-pocos cargos: con dos, hay UN intervalo y su desviación típica es cero por
-definición, así que dos compras sueltas separadas por medio año entraban como
-"suscripción semestral". Por eso el criterio final son dos condiciones:
-
-  1. Los intervalos son regulares (irregularidad <= 0,06) y su mediana encaja
+  1. Los intervalos son más o menos regulares y su mediana encaja
      en una cadencia conocida con un margen del 20 %.
   2. Si hay menos de 3 intervalos, se exige además una señal independiente:
-     que el importe sea siempre idéntico. Eso deja pasar la póliza anual del
-     coche (dos cobros de 418,60 €) y descarta las coincidencias.
+     que el importe sea siempre idéntico.
 
 VALIDACIÓN
 ----------
-Los umbrales se eligieron midiendo, no a ojo. `tests/test_recurrencia.py`
+Los umbrales se eligieron midiendo, `tests/test_recurrencia.py`
 regenera el histórico con N semillas distintas y compara contra la verdad
 conocida por construcción en `seed.py`. Sobre 500 semillas:
 
@@ -49,12 +31,6 @@ conocida por construcción en `seed.py`. Sobre 500 semillas:
     Falsos positivos ................. 1 (0,2 % de los históricos)
     Cadencias mal clasificadas ....... 0
     Seguro anual detectado ........... 500/500
-
-Dos decisiones salieron de esa medición: bajar la irregularidad de 0,10 a 0,06
-(quitó 7 falsos positivos sin añadir ni un falso negativo) y, sobre todo,
-ampliar `seed.py` de 15 a 24 meses. Lo segundo pesó más que cualquier umbral:
-con más histórico los comercios aleatorios acumulan cargos suficientes para
-que su irregularidad se note, y los falsos positivos pasaron de 23 a 0.
 """
 
 from calendar import monthrange
@@ -78,25 +54,13 @@ _CADENCIAS = (
 # Un intervalo mediano encaja en una cadencia si no se desvía más de esto.
 _TOLERANCIA_CADENCIA = 0.20
 
-# Y los intervalos deben ser regulares ENTRE SÍ. Este es el filtro que de
-# verdad separa una suscripción de un comercio que simplemente visitas mucho.
-# Valor elegido midiendo sobre 100 históricos con semillas distintas: bajarlo
-# de 0,10 a 0,06 quita 7 falsos positivos sin añadir un solo falso negativo.
+# Los intervalos deben ser regulares entre si.
 _MAX_IRREGULARIDAD = 0.06
 
 # La regularidad solo significa algo si hay intervalos suficientes que comparar.
-# Con dos cargos hay UN intervalo, su desviación típica es cero por definición y
-# el filtro anterior lo aprueba siempre: así es como dos compras sueltas
-# separadas por medio año acababan clasificadas como "suscripción semestral".
-# Por debajo de este número de intervalos se exige una segunda señal
-# independiente: que el importe sea siempre idéntico. Eso distingue una póliza
-# anual de 418,60 € de dos compras de ropa que cayeron separadas por un año.
 _MIN_INTERVALOS_SIN_CORROBORAR = 3
 
-# Cuántos importes distintos admite un cargo de precio fijo. Uno solo es lo
-# normal; dos o tres indican subidas de precio escalonadas. Muchos importes
-# distintos significan que es un recibo variable (luz, agua) y ahí no tiene
-# sentido hablar de "cambio de precio".
+# Cuántos importes distintos admite un cargo de precio fijo.
 _MAX_IMPORTES_DISTINTOS = 3
 
 # Margen antes de dar por cancelado un pago recurrente: si lleva más de 1,6
@@ -109,7 +73,7 @@ _FACTOR_INACTIVIDAD = 1.6
 # coche) se trata como recibo fijo.
 #
 # Se entrega ya clasificado en vez de dejar que el modelo lo deduzca de la
-# categoría: pidiéndoselo por prompt respondía "estás suscrito al alquiler".
+# categoría
 _CATEGORIAS_SUSCRIPCION = frozenset({"suscripciones", "gimnasio"})
 
 
@@ -159,9 +123,6 @@ def _analizar_comercio(comercio: str, movimientos: list[dict], hoy: date) -> dic
     importes_distintos = sorted(set(importes))
     precio_fijo = len(importes_distintos) <= _MAX_IMPORTES_DISTINTOS
 
-    # Con pocos intervalos, el ritmo por sí solo no es prueba (ver comentario
-    # de _MIN_INTERVALOS_SIN_CORROBORAR): hace falta que el importe se repita
-    # exactamente. Un recibo variable con solo dos cargos no es demostrable.
     if len(intervalos) < _MIN_INTERVALOS_SIN_CORROBORAR and len(importes_distintos) > 1:
         return None
 
@@ -276,7 +237,7 @@ def detectar_pagos_recurrentes(meses_historico: int = 24) -> dict:
 
 
 # ==============================================================================
-# Proyección de gasto a fin de mes ("Analítica Predictiva" del enunciado)
+# Proyección de gasto a fin de mes
 # ==============================================================================
 #
 # La proyección obvia —gasto hasta hoy ÷ días transcurridos × días del mes— es
@@ -291,9 +252,9 @@ def detectar_pagos_recurrentes(meses_historico: int = 24) -> dict:
 #
 # Dos correcciones, cada una con su motivo:
 #
-# 1. Los pagos fijos NO se extrapolan. Se sabe lo que cuestan al mes (lo
-#    calcula el detector de recurrencia), así que entran por su valor completo
-#    se hayan cobrado ya o no. Extrapolarlos es lo que rompe la ingenua.
+# 1. Los pagos fijos no se extrapolan. Se sabe lo que cuestan al mes, 
+#    así que entran por su valor completo se hayan cobrado ya o no.
+#    Extrapolarlos es lo que rompe la ingenua.
 #
 # 2. El gasto variable se MEZCLA con la media histórica, pesando el ritmo
 #    observado por lo avanzado que va el mes. El día 3 tres días de compras no
@@ -304,8 +265,7 @@ MESES_PARA_LA_MEDIA = 12
 
 # Palabras con las que el modelo pide "todo el gasto" creyendo que es una
 # categoría. No lo son, y devolverle "no hay datos en «total»" le hacía
-# responder que el cliente no había gastado nada en el mes. El modelo pedía
-# algo sensato; lo frágil era la herramienta.
+# responder que el cliente no había gastado nada en el mes.
 _SINONIMOS_DE_TODO = frozenset({
     "total", "todas", "todo", "todos", "general", "global", "gasto", "gastos",
 })
@@ -314,8 +274,7 @@ _SINONIMOS_DE_TODO = frozenset({
 def _normalizar_categoria(categoria: str | None):
     """
     Devuelve la categoría válida, None si significa "todas", o un dict de error
-    con la lista de categorías reales para que el modelo se autocorrija (igual
-    que se hace con los errores de SQL).
+    con la lista de categorías reales para que el modelo se autocorrija.
     """
     if not categoria:
         return None
@@ -354,12 +313,9 @@ def proyectar_gasto_mes(categoria: str | None = None,
                         meses_historico: int = MESES_PARA_LA_MEDIA) -> dict:
     """
     Proyecta el gasto del mes en curso, entero o de una categoría concreta.
+    Devuelve el resultado ya resuelto.
 
-    Devuelve el resultado ya resuelto (proyección, margen, tendencia), no las
-    piezas sueltas: agregar es justo lo que un modelo de 8B hace mal, y ya
-    costó una respuesta que se contradecía a sí misma con las suscripciones.
-
-    **La proyección viene con su margen de error medido.** El acierto depende
+    La proyección viene con su margen de error medido. El acierto depende
     muchísimo de la categoría, y dar una cifra seca para todas sería creíble y
     falso. Error medio del estimador sobre 23 meses del histórico, el día 5:
 
@@ -414,7 +370,7 @@ def proyectar_gasto_mes(categoria: str | None = None,
         }
 
     # Los pagos fijos de esta categoría entran por su coste mensual conocido,
-    # se hayan cobrado ya o no. Extrapolarlos es lo que rompe la regla de tres.
+    # se hayan cobrado ya o no. Extrapolarlos rompe la regla de tres.
     comercios_presentes = {f["comercio"] for f in filas}
     fijos_al_mes = sum(p["coste_mensual_estimado"] for p in pagos_fijos
                        if p["comercio"] in comercios_presentes)
@@ -438,9 +394,7 @@ def proyectar_gasto_mes(categoria: str | None = None,
     if len(variable_por_mes) < 3:
         # Sin gasto variable pero con pagos fijos, la categoría es enteramente
         # recurrente (alquiler, gimnasio, internet): no hay nada que estimar,
-        # se sabe. Son precisamente las que el backtest da con 0 % de error, y
-        # tratarlas como "sin histórico" sería tirar la mejor predicción que
-        # tenemos.
+        # se sabe.
         if fijos_al_mes > 0:
             return {
                 "estado": "ok",
@@ -466,7 +420,7 @@ def proyectar_gasto_mes(categoria: str | None = None,
 
     # Autocontraste: se proyecta cada mes pasado con el mismo estimador y el
     # mismo día de corte, y se mide el error. Es el margen real del método
-    # sobre ESTOS datos, no una barra de error inventada.
+    # sobre estos datos, no una barra de error inventada.
     errores = []
     for mes, real_variable in variable_por_mes.items():
         real = fijos_al_mes + real_variable
@@ -494,18 +448,13 @@ def proyectar_gasto_mes(categoria: str | None = None,
     desviacion_pct = (desviacion / media_total * 100) if media_total else 0.0
 
     # Una desviación por debajo del margen de error del propio método no es
-    # señal de nada, y avisar de ella sería alarmismo.
+    # señal de nada.
     if abs(desviacion_pct) < max(5.0, error_pct):
         tendencia = "en linea"
     else:
         tendencia = "por encima" if desviacion > 0 else "por debajo"
 
-    # Payload deliberadamente corto. La primera versión devolvía catorce campos
-    # (día del mes, desviación en euros y en %, error típico, pagos fijos,
-    # meses comparados...) y el modelo se perdía: llegó a decir "no has
-    # realizado ningún gasto este mes" teniendo 890,34 € delante. Es la misma
-    # lección que con las suscripciones: lo que se puede resolver aquí no se
-    # le pide a un 8B. Todo lo que era diagnóstico interno se queda dentro.
+    # Payload
     return {
         "estado": "ok",
         "categoria": categoria or "todas",
