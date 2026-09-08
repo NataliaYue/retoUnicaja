@@ -731,10 +731,11 @@ class Agente:
         Arranca un envío de Bizum: valida importe, resuelve el contacto y, si
         todo cuadra, lo deja pendiente del PIN.
 
-        Cuando el origen es un tool call del LLM, toda llamada a herramienta necesita su
-        `tool_result` en el historial antes de añadir nada más, o la API
-        rechaza la siguiente petición. Se le pasa una función que anota ese
-        resultado; desde el atajo del backend no hace falta y se omite.
+        `registrar` es la única diferencia entre las dos vías de entrada(Atajo o LLM).
+        Cuando el origen es un tool call del LLM, toda llamada a herramienta
+        necesita su `tool_result` en el historial antes de añadir nada más o la
+        API rechaza la siguiente petición: se le pasa una función que lo anota.
+        Desde el atajo del backend no hace falta y se omite.
         """
         def anotar(payload: dict) -> None:
             if registrar is not None:
