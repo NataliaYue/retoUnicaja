@@ -3,10 +3,10 @@ Servidor FastAPI.
 
 - GET  /          → sirve el frontend (frontend/index.html).
 - WS   /ws        → canal de chat en tiempo real. Cada conexión tiene su
-                    propio Agente (y por tanto su propio historial).
+                    propio Agente y por tanto su propio historial.
 - GET  /api/saldo → endpoint REST auxiliar para pintar el saldo al cargar.
 
-Protocolo WebSocket (JSON en ambos sentidos):
+Protocolo WebSocket:
 
   Cliente → Servidor:  { "mensaje": "¿cuánto gasté en gasolina este mes?" }
 
@@ -45,8 +45,7 @@ FRONTEND = Path(__file__).resolve().parent.parent / "frontend" / "index.html"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Comprobaciones de arranque. Sustituye a `@app.on_event("startup")`, que
-    está deprecado en FastAPI.
+    Comprobaciones de arranque.
 
     Sin `banco.db` la aplicación arranca pero todas las consultas fallan, así
     que es mejor no arrancar y decir cómo generarla.
@@ -85,9 +84,7 @@ async def websocket_chat(ws: WebSocket):
 
     agente = Agente(emitir)
 
-    # Saludo inicial + saldo para la cabecera. Va en un hilo como el resto de
-    # accesos a la BD: aquí se ejecuta en CADA conexión nueva, así que una
-    # reconexión masiva sería justo el momento de no bloquear el loop.
+    # Saludo inicial + saldo para la cabecera.
     datos = await asyncio.to_thread(api_consultar_saldo)
     await emitir({"type": "saldo", "valor": datos["saldo"]})
 
@@ -98,7 +95,7 @@ async def websocket_chat(ws: WebSocket):
                 timeout=TIMEOUT_WS_SEGUNDOS,
             )
 
-            # Extraemos el tipo de evento (si no viene, asumimos que es 'chat')
+            # Extraemos el tipo de evento si no viene, asumimos que es 'chat'
             tipo_evento = datos_ws.get("type", "chat")
 
             # Red de seguridad: si un turno falla, se informa y se sigue

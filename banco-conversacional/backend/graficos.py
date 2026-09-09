@@ -4,22 +4,15 @@ Motor visual: decide si un resultado merece refuerzo visual y cuál.
 El reparto de responsabilidades es deliberado y sale de medir:
 
 - SI se muestra algo lo decide el BACKEND, de forma determinista. Medido sobre
-  cuatro variantes del system prompt y tres vueltas de las 34 preguntas: la
-  decisión del modelo resultó inestable ante CUALQUIER edición del prompt,
-  aunque no hablara de gráficos (11 de 24 en dos variantes intermedias, 3 de 24
-  en la final, cambiando solo dos líneas de fechas). Cinco de las seis preguntas
-  que debían acabar en gráfico no pintaban NUNCA.
+  cuatro variantes del system prompt y tres vueltas de las 44 preguntas: la
+  decisión del modelo resultó inestable ante cualquier edición del prompt.
 
-- QUÉ representación —tabla o gráfico—, con qué columnas o qué marca, y POR QUÉ,
-  lo sigue eligiendo el LLM en una llamada aparte con prompt mínimo. Eso es lo
-  que puntúa como lógica visual y como "gráficos sin plantillas", y elegir entre
-  tabla y gráfico es una decisión de representación de verdad, no elegir entre
-  cuatro marcas de Vega-Lite.
+- Qué representación entre tabla o gráfico, con qué columnas o qué marca, y por qué,
+  lo sigue eligiendo el LLM en una llamada aparte con prompt mínimo.
 
-Los datos NO se le piden al modelo: ya los tenemos. Se le pide solo la parte
+Los datos no se le piden al modelo, ya los tenemos. Se le pide solo la parte
 visual y el backend inyecta las filas. Eso quita ~700 tokens de generación por
-visual —el modelo ya no tiene que copiar las cifras— y elimina de raíz el fallo
-de inventárselas.
+visual y elimina de raíz el fallo de inventárselas.
 """
 
 import json
@@ -32,10 +25,10 @@ import re
 MAX_PUNTOS = 40
 
 # La muestra que ve el modelo para decidir. No necesita los datos enteros para
-# elegir entre tabla y barras, y mandárselos solo gasta prefill.
+# elegir entre tabla y gráfico.
 FILAS_MUESTRA = 3
 
-# El JSON que se pide es pequeño (sin los datos dentro), así que con esto sobra
+# El JSON que se pide es pequeño así que con esto sobra
 # y de paso se acota la latencia de la llamada.
 MAX_TOKENS_VISUAL = 500
 
@@ -50,14 +43,13 @@ def _es_numero(valor) -> bool:
 
 def es_graficable(resultado: dict) -> bool:
     """
-    Decide SI hay algo que representar en un resultado SQL. Nunca decide QUÉ.
-
+    Decide si hay algo que representar en un resultado SQL.
     Dos formas dan visual:
     - Varias filas con alguna columna numérica: serie temporal o ranking.
     - UNA fila con dos o más cifras: una comparación. Esta es la que el prompt
-      nunca alcanzaba — "¿cuánto he gastado este mes comparado con el pasado?"
-      devuelve una sola fila con dos columnas, y el criterio "varios valores
-      comparables" no se le aplicaba nunca.
+      nunca alcanzaba en ejemplos como "¿cuánto he gastado este mes 
+      comparado con el pasado?" devolvía una sola fila con dos columnas,
+      y el criterio "varios valores comparables" no se le aplicaba nunca.
     """
     if resultado.get("error"):
         return False
@@ -103,9 +95,7 @@ def datos_de_sql(resultado: dict) -> tuple[list[str], list[dict]]:
     return columnas, [dict(zip(columnas, fila)) for fila in filas[:MAX_PUNTOS]]
 
 
-# Campos de `analizar_suscripciones` que valen para representar. Se dejan fuera
-# los de diagnóstico interno (importe_variable, primer_cargo, cambio_precio):
-# el modelo no los necesita para elegir columnas y solo gastan prefill.
+# Campos de `analizar_suscripciones` que valen para representar.
 CAMPOS_SUSCRIPCION = (
     "comercio", "tipo", "categoria", "cadencia",
     "importe", "coste_mensual_estimado", "cargos", "activa",
@@ -117,9 +107,7 @@ def datos_de_suscripciones(resultado: dict) -> tuple[list[str], list[dict]]:
     Aplana suscripciones + recibos fijos en filas comparables.
 
     Es el mejor caso de tabla de toda la aplicación: ocho pagos con cadencia,
-    importe y coste mensual equivalente. Leído en voz alta se convierte en la
-    enumeración que ya estaba anotada como fallo de estilo ("estás suscrito a
-    el gimnasio, Netflix, alquiler, luz…"); en una tabla se lee de un vistazo.
+    importe y coste mensual equivalente. En una tabla se lee de un vistazo.
     """
     filas = []
     for clave in ("suscripciones", "recibos_fijos"):
@@ -257,8 +245,7 @@ def _construir_tabla(parcial: dict, columnas: list[str], filas: list[dict]) -> d
 
 def _construir_grafico(parcial: dict, filas: list[dict]) -> dict | None:
     """Valida la spec y le inyecta los datos reales."""
-    # `mark` y `encoding` son obligatorios: sin ellos vega-embed no pinta nada
-    # y el gráfico se perdería en silencio, que es el fallo que ya se midió.
+    # `mark` y `encoding` son obligatorios: sin ellos vega-embed no pinta nada.
     if not parcial.get("mark") or not isinstance(parcial.get("encoding"), dict):
         return None
 

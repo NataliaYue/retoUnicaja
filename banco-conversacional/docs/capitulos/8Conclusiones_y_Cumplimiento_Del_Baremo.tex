@@ -23,10 +23,18 @@ datos.
 
 Durante el desarrollo también se han realizado diferentes ajustes para reducir
 el tiempo de respuesta. Un ejemplo es la resolución directa de determinadas
-consultas, como la consulta del saldo, y la generación paralela de los
-componentes visuales. En las pruebas realizadas, esta última modificación
-permitió reducir el tiempo de respuesta aproximado de 12,4 segundos a 6,7
-segundos.
+consultas, como la del saldo, que se resuelven sin recurrir al modelo.
+
+Otro es la posición del motor visual dentro del turno. La generación de la
+tabla o el gráfico no se ejecuta en paralelo con la respuesta —la memoria
+disponible en la tarjeta gráfica no permite atender dos peticiones simultáneas
+al modelo—, sino después del evento \texttt{fin\_respuesta}, que es el que
+activa la síntesis de voz. De este modo la generación queda fuera del camino
+crítico: el usuario escucha la respuesta de inmediato y el elemento visual
+aparece mientras la está oyendo, acompañado de un indicador de que se está
+preparando. En las pruebas realizadas, este cambio redujo el tiempo hasta la
+respuesta hablada de 12,4 a 6,7 segundos en las preguntas que generan un
+elemento visual.
 
 En conjunto, el proyecto muestra que es posible utilizar un modelo de lenguaje
 como parte de una aplicación de gestión financiera manteniendo fuera del modelo

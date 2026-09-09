@@ -4,13 +4,13 @@ Configuración central del proyecto.
 Aquí vive todo lo que el resto de módulos necesita compartir:
 - Modelo LLM y parámetros.
 - Ruta de la base de datos.
-- Esquema de la BD (se inyecta en el system prompt para el text-to-SQL).
+- Esquema de la BD.
 - System prompt del agente.
 """
 
-import os  # leer variables de entorno
-from datetime import date # fechas
-from pathlib import Path  #construir rutas de forma segura
+import os
+from datetime import date
+from pathlib import Path  
 
 from dotenv import load_dotenv
 
@@ -23,20 +23,18 @@ load_dotenv()
 #leer la variable de entorno MODELO. Si no existe, usa por defecto qwen3 en Ollama
 MODELO = os.getenv("MODELO", "qwen3:8b")
 
-# Número máximo de tokens que puede geenrar el modelo en una respuesta.
+# Número máximo de tokens que puede generar el modelo en una respuesta.
 MAX_TOKENS = 2000
 
 # Temperatura baja, buscamos consistencia, no creatividad.
 TEMPERATURA = 0.2
 
 # Evita que el agente entre en bucles infinitos llamando herramientas repetidamente.
-# La cadena típica ya son 3 (SQL → gráfico → conclusión); con reintentos de
-# autocorrección de SQL o de JSON corrupto hacen falta más.
 MAX_ITERACIONES_AGENTE = 8
 
-# Mensajes de conversación que se conservan (sin contar el system prompt).
+# Mensajes de conversación que se conservan sin contar el system prompt.
 # El contexto es de 8192 tokens y el system prompt + las tools ya se llevan
-# ~2.900: si el historial crece sin límite, Ollama acaba truncando por delante
+# una buena parte, si el historial crece sin límite, Ollama acaba truncando por delante
 # y se pierde el system prompt, con lo que el agente deja de saber quién es.
 MAX_MENSAJES_HISTORIAL = 24
 
@@ -44,19 +42,13 @@ MAX_MENSAJES_HISTORIAL = 24
 # Válvula de seguridad por si una consulta devuelve filas muy anchas.
 MAX_CHARS_TOOL_RESULT = 4000
 
-# ¿Se le ofrecen al LLM las herramientas visuales (`mostrar_grafico`,
-# `mostrar_tabla`)? Por defecto NO, y la decisión está medida (3 vueltas de las
-# 34 preguntas, con las tools expuestas y sin ellas):
+# ¿Se le ofrecen por defecto al LLM las herramientas visuales 
+# (`mostrar_grafico`,mostrar_tabla`)? Por defecto NO, y la decisión está medida:
 #
 #                              con tools    sin tools
 #   Respuesta final correcta      86,0 %      90,3 %
 #   Latencia hasta la voz         12,4 s       6,7 s   (preguntas con visual)
 #   Prompt                     2.912 tok   2.396 tok
-#
-# Con las tools expuestas el modelo las llama DENTRO del bucle (15 de 35
-# visuales), o sea antes de `fin_respuesta`, o sea bloqueando la respuesta
-# hablada. Ocultarlas no le quita la decisión: sigue eligiendo tabla o gráfico
-# en la llamada dedicada de `graficos.py`, y ahí acierta 8 de 8.
 VISUALES_AL_LLM = os.getenv("VISUALES_AL_LLM", "0") == "1"
 
 #===========================================================================
@@ -84,7 +76,7 @@ BIZUM_LIMITE_DIARIO = 500.00
 #===========================================================================
 
 # Inactividad máxima de una conexión WebSocket. Al cerrarse, el frontend
-# reconecta y se crea un Agente nuevo: el historial se pierde.
+# reconecta y se crea un Agente perdiendose el historial.
 TIMEOUT_WS_SEGUNDOS = int(os.getenv("TIMEOUT_WS_SEGUNDOS", "1800"))
 
 #===========================================================================

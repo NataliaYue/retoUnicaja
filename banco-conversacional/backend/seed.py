@@ -1,27 +1,17 @@
 """
-Generación de la base de datos ficticia (requisito 2 del reto).
+Generación de la base de datos ficticia.
 
-Genera ~24 meses de movimientos realistas para un cliente español, con
-patrones que hacen interesantes las preguntas del jurado:
+Genera ~24 meses de movimientos realistas para un cliente con ciertos patrones:
 
 - Nómina mensual (día 28) y alquiler (día 2).
 - Recibos periódicos: luz, agua, internet, Netflix, Spotify, gimnasio.
-- Seguro del coche UNA vez al año (→ "¿cuándo pagué el seguro del coche?").
-- Gasolina varias veces al mes en gasolineras reales (→ "¿cuánto llevo
-  gastado en gasolina este mes? ¿y esta semana?").
+- Seguro del coche UNA vez al año.
+- Gasolina varias veces al mes en gasolineras reales.
 - Compras de supermercado, restaurantes, farmacia, ropa, ocio, Bizums...
 
 El reto sugiere apoyarse en un LLM para generar los datos de forma masiva.
-Aquí usamos un generador determinista (semilla fija → BD reproducible, algo
-que agradeceréis al depurar y al grabar el vídeo), pero el catálogo de
-comercios/descripciones fue redactado con ayuda de un LLM. Si preferís
-generación 100% LLM, el prompt equivalente sería:
-
-    "Genera un JSON con 800 movimientos bancarios realistas de un cliente
-    español entre <fecha-15meses> y hoy, con campos fecha, importe (negativo
-    = gasto), categoria (de esta lista: ...), comercio y descripcion.
-    Incluye nómina mensual de ~2.200 €, alquiler de 650 €, un seguro de
-    coche anual, y patrones semanales creíbles de supermercado y gasolina."
+Aquí usamos un generador determinista, pero el catálogo de comercios/descripciones
+fue redactado con ayuda de un LLM.
 
 Uso:  python -m backend.seed
 """
@@ -36,16 +26,10 @@ random.seed(42)  # reproducible
 
 HOY = date.today()
 
-# 24 meses de histórico. Con la ventana anterior (~15 meses) solo entraba UN
-# cargo del seguro del coche, así que era imposible detectarlo como pago anual
-# y la pregunta "¿cuándo pagué el seguro?" se quedaba coja. Dos años dan dos
-# renovaciones y permiten además comparativas interanuales.
+# 24 meses de histórico.
 INICIO = (HOY.replace(day=1) - timedelta(days=730)).replace(day=1)
 
-# Netflix sube de precio a mitad del histórico. Sin una subida en los datos, la
-# detección de cambios de precio de analitica.py no tiene nada sobre lo que
-# dispararse y "¿alguna suscripción me ha subido de precio?" siempre se
-# responde que no. Queda ~1 año a cada precio.
+# Netflix sube de precio a mitad del histórico.
 SUBIDA_NETFLIX = (HOY.replace(day=1) - timedelta(days=365)).replace(day=1)
 PRECIO_NETFLIX_ANTIGUO = -13.99
 PRECIO_NETFLIX_NUEVO = -15.99
@@ -134,7 +118,7 @@ def generar_movimientos() -> list[tuple]:
             add(mes + timedelta(days=random.randint(0, 27)),
                 random.uniform(5, 80), "bizum_recibido", c, f"Bizum recibido de {c}")
 
-    # Seguro del coche: una vez al año, en febrero (pregunta estrella del reto)
+    # Seguro del coche: una vez al año, en febrero
     for anio in range(INICIO.year, HOY.year + 1):
         add(date(anio, 2, 10), -418.60, "seguro_coche", "Línea Directa",
             "Seguro anual del coche - Renovación póliza")

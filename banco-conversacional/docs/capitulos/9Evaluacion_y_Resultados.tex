@@ -1,0 +1,300 @@
+\section{Evaluación y resultados}
+
+\subsection{Por qué se construyó un banco de pruebas}
+
+Un asistente conversacional puede dar una respuesta equivocada con total
+naturalidad. A diferencia de un error de programación, que se manifiesta con
+una excepción, una cifra incorrecta expresada en una frase bien construida
+resulta indistinguible de una correcta para quien la escucha.
+
+Durante el desarrollo se detectó un caso que ilustra el problema. Ante la
+pregunta ``¿he gastado más este año que el año pasado?'', el modelo generaba una
+consulta con \texttt{strftime('\%Y-\%m')} en lugar de \texttt{strftime('\%Y')}.
+La consulta comparaba el mes actual contra el mes anterior, pero la respuesta
+los presentaba como años. El asistente respondía que se había gastado más este
+año cuando la realidad era 17.870 € frente a 26.643 €: la conclusión estaba
+invertida y se expresaba con seguridad. Revisando la interfaz, la respuesta
+resultaba convincente.
+
+Por este motivo se desarrolló \texttt{tests/evaluar.py}, un banco de preguntas
+que se ejecuta contra el agente real y mide su comportamiento de forma
+sistemática.
+
+\subsection{Qué se mide y por qué se separa}
+
+El banco contiene 44 preguntas etiquetadas, distribuidas entre los tipos de
+consulta que menciona el enunciado (gastos, comparativas y suscripciones) y
+otros añadidos durante el desarrollo: seguimiento multiturno, operaciones de
+Bizum, saldo, ingresos, preguntas ambiguas, límites del asistente y previsión.
+
+Se puntúan cuatro indicadores por separado, porque responden a fallos de
+naturaleza distinta:
+
+\begin{itemize}
+    \item \textbf{Elección de herramienta.} Preguntar por las suscripciones y
+    que el modelo escriba una consulta SQL es un fallo aunque la cifra final sea
+    correcta. Se registra mediante un espía sobre \texttt{ejecutar\_tool}, de
+    forma que también se observan las resoluciones directas del backend, que no
+    aparecen en el historial del modelo.
+
+    \item \textbf{Respuesta final.} Que la consulta sea correcta no garantiza
+    que el modelo traslade bien la cifra al texto. Es lo único que oye el
+    usuario, y se comprueba que los valores esperados aparezcan con formato
+    español.
+
+    \item \textbf{Refuerzo visual.} Se puntúa en los dos sentidos: no mostrar
+    nada cuando hay varios valores comparables es un fallo, y mostrar algo
+    cuando la respuesta es un único dato también. Una tabla cuenta igual que un
+    gráfico, porque la elección entre ambos corresponde al modelo y las dos son
+    respuestas válidas.
+
+    \item \textbf{Validez de la especificación.} Que llegue un gráfico no
+    significa que se vea. Una especificación sin el campo \texttt{mark} supera
+    la validación del backend y falla después en el renderizado, sin dejar
+    rastro. Se puntúa por separado del indicador anterior porque son fallos de
+    cosas distintas: uno mide al modelo decidiendo y el otro al modelo
+    redactando.
+\end{itemize}
+
+Se mide además un quinto indicador sin puntuación, como diagnóstico: se ejecutan
+la consulta generada por el agente y una de referencia escrita a mano, y se
+comparan los valores obtenidos. No cuenta para el resultado porque el modelo
+puede elegir una interpretación distinta y defendible —otro periodo, otra forma
+de calcular una media— y divergir de la referencia sin estar equivocado. Nunca
+se compara el texto de la consulta: existen muchas consultas correctas
+distintas para la misma pregunta.
+
+La latencia se mide en dos tramos. El relevante es el tiempo hasta el evento
+\texttt{fin\_respuesta}, que es el que activa la síntesis de voz y por tanto lo
+que el usuario percibe como demora. El motor visual se ejecuta después de ese
+evento de forma deliberada, así que contabilizar únicamente el tiempo total
+penalizaría un trabajo que ya no bloquea la respuesta.
+
+\subsection{Resultados}
+
+Las mediciones se realizan con tres repeticiones de las 44 preguntas, sobre
+\texttt{qwen3:8b} y con la base de datos regenerada previamente.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\toprule
+\textbf{Indicador} & \textbf{Resultado} \\
+\midrule
+Elección de herramienta            & 97,6 \% \\
+Respuesta final correcta           & 88,9 \% \\
+Refuerzo visual cuando corresponde & 100 \% \\
+Especificaciones válidas           & 100 \% \\
+Latencia mediana hasta la voz      & 3,3 s \\
+\bottomrule
+\end{tabular}
+\caption{Resultados sobre 44 preguntas y 3 repeticiones.}
+\end{table}
+
+La variabilidad entre ejecuciones del mismo sistema es de uno o dos casos sobre
+126, por lo que las comparaciones entre configuraciones se realizan siempre con
+repeticiones. Una diferencia de dos casos en una única ejecución no constituye
+una señal.
+
+\subsection{Decisiones de diseño tomadas a partir de la medición}
+
+El banco de pruebas no se utilizó únicamente para verificar el resultado final.
+En varios casos, la medición contradijo una decisión previa y motivó un cambio
+de arquitectura.
+
+\subsubsection{La decisión de mostrar un gráfico}
+
+Inicialmente, la decisión de acompañar una respuesta con un gráfico se dejaba al
+modelo mediante instrucciones en el \textit{system prompt}. La medición mostró
+que esa decisión no era estable: variaba ante cualquier modificación del
+\textit{prompt}, incluso ante cambios que no trataban sobre gráficos.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Pregunta} & \textbf{v1} & \textbf{v2} & \textbf{v3} & \textbf{v4} \\
+\midrule
+Ranking de comercios          & 0/3 & 2/3 & 0/3 & 0/3 \\
+Comparación mensual           & 0/3 & 0/3 & 0/3 & 0/3 \\
+Comparación por categorías    & 0/3 & 2/3 & 2/3 & 0/3 \\
+Serie de seis meses           & 0/3 & 3/3 & 3/3 & 0/3 \\
+Comparación interanual        & 0/3 & 0/3 & 0/3 & 0/3 \\
+Evolución mensual             & 3/3 & 3/3 & 3/3 & 3/3 \\
+\bottomrule
+\end{tabular}
+\caption{Veces que cada pregunta produce un gráfico, sobre cuatro versiones del
+\textit{system prompt}. Entre la tercera y la cuarta solo cambiaron dos líneas
+relativas al tratamiento de fechas.}
+\end{table}
+
+Dentro de cada versión el comportamiento es prácticamente determinista, pero
+entre versiones cambia sin relación con el contenido modificado. Cinco de las
+seis preguntas no producían gráfico en la versión final; la única que funciona
+de forma consistente es la que contiene una petición visual explícita
+(``muéstrame la evolución'').
+
+A partir de este resultado se reorganizó la responsabilidad. La decisión de
+\textit{si} existe algo que representar pasó al backend, mediante una regla
+determinista sobre la forma del resultado: varias filas con alguna columna
+numérica, o una sola fila con dos o más cifras comparables. La decisión de
+\textit{qué} representación utilizar —tabla o gráfico—, con qué marca, qué ejes
+y con qué justificación, permanece en el modelo, en una llamada dedicada de
+tarea única.
+
+El indicador pasó del 16,7 \% al 100 \%, sin variación en la precisión de las
+respuestas ni en la latencia percibida. Conviene subrayar que la decisión que se
+trasladó al código no es una decisión de diseño visual, sino una comprobación
+mecánica sobre la estructura de los datos.
+
+\subsubsection{El tamaño del \textit{system prompt}}
+
+Durante el desarrollo, el \textit{system prompt} fue creciendo al incorporar
+nuevas reglas. La medición mostró que ese crecimiento degradaba reglas
+anteriores: una pregunta de comparación entre categorías pasó de 3/3 a 0/3 a lo
+largo de varias sesiones, con el ejemplo que la resolvía intacto en el
+\textit{prompt}.
+
+La causa era la duplicación: las mismas seis herramientas se describían tanto en
+el \textit{prompt} como en sus esquemas JSON, y ambos textos se envían en cada
+petición. Se eliminó la parte duplicada —la que indica cuándo llamar a cada
+herramienta, que el esquema ya expresa y en mejor posición, junto a la
+definición de la función— y se conservó la que el esquema no puede expresar:
+cómo interpretar el resultado devuelto.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrr}
+\toprule
+ & \textbf{Antes} & \textbf{Después} \\
+\midrule
+Contexto fijo por petición   & 3.822 tokens & 3.208 tokens \\
+Porcentaje de la ventana     & 47 \%        & 39 \% \\
+Elección de herramienta      & 97,6 \%      & 97,6 \% \\
+Respuesta final correcta     & 85,7 \%      & 90,5 \% \\
+\bottomrule
+\end{tabular}
+\caption{Efecto de eliminar las instrucciones duplicadas.}
+\end{table}
+
+Se verificó una por una que ninguna de las diecisiete reglas obtenidas mediante
+medición se hubiera perdido en el proceso. Se recuperaron dos preguntas, una de
+ellas registrada desde el inicio como limitación asumida del modelo: no lo era.
+
+\subsection{Validación de los componentes deterministas}
+
+Los componentes que no dependen del modelo se validan por separado, con pruebas
+que no requieren el LLM y que por tanto son deterministas y rápidas.
+
+\subsubsection{Detección de pagos recurrentes}
+
+Los umbrales del detector se ajustaron observando una única base de datos, lo
+cual no demuestra que generalicen. Para comprobarlo se regenera el histórico con
+500 semillas distintas y se contrasta el resultado con la verdad conocida por
+construcción: 0 falsos negativos, 1 falso positivo (0,2 \% de los históricos
+generados), ninguna cadencia mal clasificada y el seguro anual detectado en las
+500 semillas.
+
+Dos decisiones de diseño provienen de esa medición. La primera, reducir el
+umbral de irregularidad de 0,10 a 0,06. La segunda, ampliar el histórico
+generado de 15 a 24 meses, que por sí sola redujo los falsos positivos de 23 a
+0: con más histórico, los comercios no recurrentes acumulan cargos suficientes
+para que su irregularidad resulte evidente.
+
+Conviene señalar el límite de esta validación. El generador asigna a los pagos
+recurrentes un día fijo de cada mes, mientras que los gastos no recurrentes caen
+en un día aleatorio. La prueba demuestra por tanto que el detector distingue un
+cargo de día fijo de uno de día aleatorio, y que no clasifica como recurrente un
+gasto habitual: una compra semanal, incluso perfectamente regular, no se detecta
+como suscripción, porque el clasificador solo admite cadencias reconocidas. No
+cubre, en cambio, el desplazamiento del día de cobro habitual en las
+domiciliaciones reales, que se cargan el siguiente día hábil. Medido
+posteriormente, el detector reconoce la cadencia con desplazamientos de hasta
+dos días, y deja de reconocerla a partir de tres.
+
+\subsubsection{Proyección de gasto}
+
+El estimador de la proyección a fin de mes se seleccionó comparando tres
+alternativas sobre los 23 meses completos del histórico, midiendo el error de
+cada una según el día del mes en que se realiza la estimación.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Método} & \textbf{Día 5} & \textbf{Día 10} & \textbf{Día 15} & \textbf{Día 20} \\
+\midrule
+Proporción directa            & 174,5 \% & 73,3 \% & 46,1 \% & 25,9 \% \\
+Pagos fijos por separado      & 31,7 \%  & 18,4 \% & 13,6 \% & 10,6 \% \\
+Combinado con media histórica & 8,7 \%   & 7,6 \%  & 8,4 \%  & 7,7 \% \\
+\bottomrule
+\end{tabular}
+\caption{Error medio de cada estimador según el día del mes.}
+\end{table}
+
+La proporción directa resulta inservible porque el alquiler y los recibos
+domiciliados se cargan a principios de mes: el día 3, con 890,34 € gastados de
+los cuales 844,80 € corresponden a pagos fijos, una regla de tres proyectaría
+8.903 € para el mes completo.
+
+El estimador adoptado no extrapola los pagos fijos, cuyo coste mensual ya conoce
+el detector de recurrencia, y combina el ritmo de gasto variable observado con
+la media histórica, ponderando según lo avanzado que esté el mes. El error se
+mantiene estable en torno al 8 \% durante todo el mes, lo que permite ofrecer
+una previsión útil desde los primeros días.
+
+Cada proyección se acompaña de su margen de error, calculado aplicando el mismo
+estimador a cada mes pasado y midiendo la desviación. El margen varía
+considerablemente según la categoría: 0 \% en alquiler o gimnasio, que son pagos
+fijos conocidos; en torno al 20 \% en supermercado o gasolina; y superior al
+100 \% en los Bizums enviados, que son impredecibles por naturaleza. Ofrecer una
+cifra única para todas las categorías habría resultado igual de creíble y
+sustancialmente menos honesto.
+
+\subsubsection{Flujo de operaciones}
+
+El envío de Bizums se valida mediante 35 comprobaciones que recorren el flujo
+completo sin intervención del modelo: reconocimiento de la petición, validación
+del importe, resolución del contacto, gestión del PIN y atomicidad de la
+escritura.
+
+Esta prueba se escribió antes de refactorizar el flujo, precisamente porque el
+banco de preguntas no cubre ese camino: sus preguntas sobre Bizums son consultas
+sobre envíos pasados, que se resuelven mediante SQL. Era posible alterar el
+comportamiento del envío sin que ninguna métrica lo reflejara.
+
+Una de las comprobaciones verifica que el bloqueo de escritura se adquiere antes
+de la primera lectura. Sin esa garantía, dos envíos simultáneos leen el mismo
+saldo, ambos superan la comprobación y una actualización sobrescribe a la otra:
+en la reproducción del caso, dos envíos de 600 € sobre un saldo de 1.000 €
+resultaban ambos aprobados. La comprobación se formula sobre la propiedad que lo
+impide y no sobre el síntoma, ya que una condición de carrera solo se manifiesta
+cuando dos hilos coinciden en una ventana de milisegundos y una prueba que
+dependiera de ello resultaría inestable.
+
+\subsection{Limitaciones conocidas}
+
+La evaluación permite delimitar con precisión lo que el sistema no resuelve:
+
+\begin{itemize}
+    \item \textbf{Resolución de referencias entre turnos.} Ante la secuencia
+    ``¿cuánto he gastado en supermercado este año?'', ``¿y en restaurantes?'',
+    ``¿y el año pasado?'', el modelo resuelve la tercera pregunta contra la
+    primera y responde sobre supermercado. Es un comportamiento sistemático, no
+    ocasional.
+
+    \item \textbf{Previsión de meses futuros.} La herramienta proyecta
+    únicamente el mes en curso. Ante una pregunta sobre el mes siguiente, el
+    modelo responde con la cifra del mes actual sin advertir la diferencia. Se
+    probaron dos correcciones —una regla en el \textit{prompt} y un campo
+    explícito en la respuesta de la herramienta— y ninguna resultó efectiva.
+
+    \item \textbf{Preguntas sin periodo explícito y consultas sobre terceros.}
+    Se documentan como limitaciones asumidas, con la salvedad de que una de las
+    inicialmente clasificadas como tales resultó no serlo: desapareció al
+    reducir el tamaño del \textit{system prompt}.
+\end{itemize}
+
+Delimitar estas limitaciones con precisión resulta más útil que un resultado
+global elevado, ya que indica en qué condiciones conviene confiar en el sistema
+y en cuáles no.

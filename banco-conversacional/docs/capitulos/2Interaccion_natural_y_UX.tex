@@ -45,11 +45,18 @@ incrementaba la latencia hasta alcanzar aproximadamente 12,4 segundos.
 Para evitar este comportamiento, en la configuración actual las herramientas
 visuales no se exponen al modelo principal. En su lugar, el backend determina
 de forma determinista, a partir de los datos obtenidos, si es necesario generar
-una tabla o un gráfico. Cuando corresponde, esta generación se ejecuta de forma
-paralela a la respuesta de texto, de manera que ambas tareas no tengan que
-esperarse entre sí.
+una tabla o un gráfico.
 
-Con este cambio, el tiempo de respuesta se redujo hasta aproximadamente
-6,7 segundos. Además de mejorar la latencia, esta separación permite mantener
-independientes la generación de la respuesta y la representación visual de los
-datos.
+Cuando corresponde, esa generación no se ejecuta en paralelo con la respuesta:
+la memoria disponible en la tarjeta gráfica no permite atender dos peticiones
+simultáneas al modelo, por lo que el servidor las atendería igualmente una
+detrás de otra. Lo que se hace es situarla fuera del camino crítico,
+ejecutándola después del evento \texttt{fin\_respuesta}, que es el que activa la
+síntesis de voz. El usuario escucha la respuesta de inmediato y el elemento
+visual aparece mientras la está oyendo, precedido de un indicador de que se
+está preparando.
+
+Con este cambio, el tiempo hasta la respuesta hablada se redujo de 12,4 a
+aproximadamente 6,7 segundos en las preguntas que generan un elemento visual.
+Además de mejorar la latencia percibida, esta separación mantiene independientes
+la generación de la respuesta y la representación visual de los datos.

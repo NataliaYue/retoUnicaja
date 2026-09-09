@@ -1,5 +1,5 @@
 """
-APIs bancarias ficticias (requisito "Operaciones", 10 pts del baremo).
+APIs bancarias ficticias.
 
 Simulan los endpoints internos del banco que un asistente real invocaría.
 Se exponen como funciones Python que el agente llama vía tool calling; en
@@ -7,7 +7,7 @@ producción serían llamadas HTTP a los servicios del banco, por eso devuelven
 dicts con la forma típica de una respuesta de API (estado + datos).
 
 Nota de seguridad: son las ÚNICAS funciones con acceso de escritura a la BD,
-y siempre con parámetros ligados (?), nunca con SQL construido por el LLM.
+y siempre con parámetros ligados, nunca con SQL construido por el LLM.
 """
 
 from datetime import date
@@ -57,7 +57,7 @@ def api_enviar_bizum(destinatario: str, cantidad: float, concepto: str = "") -> 
             "motivo": "El importe de un Bizum debe estar entre 0,50 € y 1.000 €.",
         }
 
-    # Todo el leer-comprobar-escribir va dentro de UNA transacción IMMEDIATE:
+    # Todo el leer-comprobar-escribir va dentro de una transacción IMMEDIATE:
     # el límite diario y el saldo se comprueban contra el mismo estado sobre el
     # que después se escribe. Sin eso, dos envíos a la vez leen el mismo saldo,
     # los dos lo aprueban y el segundo UPDATE pisa al primero.
