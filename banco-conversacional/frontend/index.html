@@ -569,7 +569,7 @@
 
       <div class="config-grupo">
         <label for="input-pitch"> Tono de voz del asistente (agudo - grave)</label>
-        <input type="range" id="input-pitch" min="0" max="3" step="0.1" value="1">
+        <input type="range" id="input-pitch" min="0" max="2" step="0.1" value="1">
         <div style="display: flex; justify-content: space-between; font-size: 0.75em; color: var(--tinta-suave);">
                 <span>Grave</span>
                 <span>Agudo</span>
@@ -578,7 +578,7 @@
 
       <div class="config-grupo">
         <label for="input-rate"> Velocidad de voz </label>
-        <input type="range" id="input-rate" min="0" max="2" step="0.25" value="1">
+        <input type="range" id="input-rate" min="0.5" max="2" step="0.25" value="1">
         <div style="display: flex; justify-content: space-between; font-size: 0.75em; color: var(--tinta-suave);">
           <span>Lento</span>
           <span>Rápido</span>
@@ -1093,21 +1093,12 @@ function probarVoz() {
   speechSynthesis.speak(mensaje);
 }
 
-function actualizarEtiquetasRangos() {
-  const tono = parseFloat(document.getElementById('input-pitch').value);
-  const vel = parseFloat(document.getElementById('input-rate').value);
-  
-  // document.getElementById('label-tono').textContent = tono < 0.8 ? "Grave" : tono > 1.2 ? "Agudo" : "Normal";
-  // document.getElementById('label-velocidad').textContent = vel < 0.9 ? "Lento" : vel > 1.2 ? "Rápido" : "Normal";
-}
-document.getElementById('input-pitch').addEventListener('input', actualizarEtiquetasRangos);
-document.getElementById('input-rate').addEventListener('input', actualizarEtiquetasRangos);
-
 function hablar(texto){
   const u = new SpeechSynthesisUtterance(texto);
   u.lang = 'es-ES';
 
-  u.rate = parseFloat(localStorage.getItem('app_rate')) || 1;
+
+  u.rate = parseFloat(localStorage.getItem('app_rate')) || 1.05;
   u.pitch = parseFloat(localStorage.getItem('app_tono')) || 1;
 
   const vozEs = speechSynthesis.getVoices();
@@ -1208,7 +1199,7 @@ function mostrarTicketBizum(destinatario, importe, concepto) {
 function abrirConfigVoice() {
   document.getElementById('input-pitch').value = localStorage.getItem('app_tono') || 1;
   document.getElementById('input-rate').value = localStorage.getItem('app_rate') || 1;
-  document.getElementById('select-voice').value = localStorage.getItem('app_voz')
+  document.getElementById('select-voice').value = localStorage.getItem('app_voz') || 'default';
   document.getElementById('config-voice').classList.remove('oculto');
 }
 
