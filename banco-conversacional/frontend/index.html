@@ -294,6 +294,14 @@
   }
   #config-modal.oculto { display: none; opacity: 0; }
 
+   #config-voice {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(23, 33, 27, 0.7);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 2500; opacity: 1; transition: opacity 0.2s;
+  }
+  #config-voice.oculto { display: none; opacity: 0; }
+
   .config-container {
     background: var(--superficie); padding: 30px; border-radius: 20px;
     width: 380px; box-shadow: var(--sombra); display: flex; flex-direction: column; gap: 16px;
@@ -308,6 +316,7 @@
   .config-botones { display: flex; gap: 10px; margin-top: 10px; }
   .config-botones button { flex: 1; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; }
   .btn-guardar { background: var(--verde); color: #fff; }
+  .btn-voz { background: var(--linea); color: var(--tinta-suave)}
   .btn-cerrar-config { background: var(--linea); color: var(--tinta); }
 
   /* ── Teclado de Seguridad ─────────────────────────────── */
@@ -456,7 +465,25 @@
       <span id="subtitulo-perfil" style="display: block; font-size: 12px; color: var(--tinta-suave);">Reto IA · Cliente Personal</span>
     </div>
   </div>
+
 <div class="acciones-header">
+  <button class="btn-config" id="btnAudio" title="Personalizar voz de asistente" onclick="abrirConfigVoice()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    
+        <!-- Oreja ampliada -->
+        <g transform="translate(-1, -1.5) scale(1.15)">
+          <path d="M9 13.5c-1.5-1.5-2.5-3-2.5-5 0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5c0 4-4.5 5.5-4.5 9 0 1.5-1 2.5-2.5 2.5S8 19 8 17.5c0-2 2-3 2-4" />
+          <path d="M12 8a2.5 2.5 0 0 1 2.5 2.5" />
+          <path d="M10 12.5a1.5 1.5 0 0 1 1.5-1.5" />
+        </g>
+        
+        <!-- Ondas de sonido -->
+        <path d="M19.5 8.5l2.5-1.5" />
+        <path d="M20.5 12h2.5" />
+        <path d="M19.5 15.5l2.5 1.5" />
+        
+      </svg>
+    </button>
   <!-- Botón para volver al login con icono de salida/casa -->
   <button class="btn-config" id="btnHome" title="Cerrar sesión / Volver a inicio" onclick="volverInicio()">
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -526,6 +553,47 @@
             <button class="btn-cerrar-config" onclick="cerrarConfig()">Cancelar</button>
             <button class="btn-guardar" onclick="guardarConfig()">Guardar Cambios</button>
         </div>
+    </div>
+</div>
+
+<div id="config-voice" class="oculto">
+    <div class="config-container">
+      <h3>Personalizar voz del asistente</h3>
+
+      <div class="config-grupo">
+        <label for="select-voice"> Tipo de voz del asistente </label>
+        <select id="select-voice">
+          <option value="default">Voz por defecto (Automática)</option>
+        </select>
+      </div>
+
+      <div class="config-grupo">
+        <label for="input-pitch"> Tono de voz del asistente (agudo - grave)</label>
+        <input type="range" id="input-pitch" min="0" max="3" step="0.1" value="1">
+        <div style="display: flex; justify-content: space-between; font-size: 0.75em; color: var(--tinta-suave);">
+                <span>Grave</span>
+                <span>Agudo</span>
+        </div>
+      </div>
+
+      <div class="config-grupo">
+        <label for="input-rate"> Velocidad de voz </label>
+        <input type="range" id="input-rate" min="0" max="2" step="0.25" value="1">
+        <div style="display: flex; justify-content: space-between; font-size: 0.75em; color: var(--tinta-suave);">
+          <span>Lento</span>
+          <span>Rápido</span>
+        </div>
+      </div>
+
+      <div class="config-botones">
+        <button class="btn-voz" onclick="probarVoz()"> Probar ajustes </button>
+      </div>
+
+      <div class="config-botones">
+            <button class="btn-cerrar-config" onclick="cerrarConfigVoice()">Cancelar</button>
+            <button class="btn-guardar" onclick="guardarConfigVoice()">Guardar Cambios</button>
+      </div>
+
     </div>
 </div>
 
@@ -962,12 +1030,101 @@ btnMic.addEventListener('click', () => {
   rec.start();
 });
 
+function cargarVocesEnMenu() {
+  const selectVoz = document.getElementById('select-voice');
+  if (!selectVoz) return;
+  
+  const voces = speechSynthesis.getVoices();
+  if (voces.length === 0) return;
+
+  selectVoz.innerHTML = '<option value="default">Voz por defecto (Automática)</option>';
+  const vocesEs = voces.filter(v => v.lang.startsWith('es'));
+
+  vocesEs.forEach(voz => {
+    const opcion = document.createElement('option');
+    opcion.value = voz.name;
+    opcion.textContent = `${voz.name} (${voz.lang})`;
+    selectVoz.appendChild(opcion);
+  });
+
+  const vozGuardada = localStorage.getItem('app_voz');
+  if (vozGuardada) selectVoz.value = vozGuardada;
+}
+
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = cargarVocesEnMenu;
+}
+cargarVocesEnMenu();
+
+function probarVoz() {
+  // Cancelamos cualquier voz que esté sonando en ese momento para que no se pisen
+  speechSynthesis.cancel();
+  
+  // Creamos el mensaje de prueba
+  const mensaje = new SpeechSynthesisUtterance("Hola, soy tu asistente virtual");
+  mensaje.lang = 'es-ES';
+  
+  // Leemos el valor EXACTO que tiene la barra en este momento (antes de guardar)
+  const tonoActual = parseFloat(document.getElementById('input-pitch').value);
+  const rateActual = parseFloat(document.getElementById('input-rate').value);
+  mensaje.pitch = tonoActual;
+  mensaje.rate = rateActual;
+  
+  const nombreVozActual = document.getElementById('select-voice').value; 
+  const voces = speechSynthesis.getVoices();
+  
+  let vozElegida = null;
+  
+  // Si el usuario ha elegido una voz específica (no la de por defecto), la buscamos
+  if (nombreVozActual !== 'default') {
+    vozElegida = voces.find(v => v.name === nombreVozActual);
+  }
+  
+  // Si no ha elegido ninguna o hubo un error, usamos la primera en español como plan B
+  if (!vozElegida) {
+    vozElegida = voces.find(v => v.lang.startsWith('es'));
+  }
+  
+  // Asignamos la voz encontrada al mensaje
+  if (vozElegida) {
+    mensaje.voice = vozElegida;
+  }
+  
+  // Reproducimos el audio
+  speechSynthesis.speak(mensaje);
+}
+
+function actualizarEtiquetasRangos() {
+  const tono = parseFloat(document.getElementById('input-pitch').value);
+  const vel = parseFloat(document.getElementById('input-rate').value);
+  
+  // document.getElementById('label-tono').textContent = tono < 0.8 ? "Grave" : tono > 1.2 ? "Agudo" : "Normal";
+  // document.getElementById('label-velocidad').textContent = vel < 0.9 ? "Lento" : vel > 1.2 ? "Rápido" : "Normal";
+}
+document.getElementById('input-pitch').addEventListener('input', actualizarEtiquetasRangos);
+document.getElementById('input-rate').addEventListener('input', actualizarEtiquetasRangos);
+
 function hablar(texto){
   const u = new SpeechSynthesisUtterance(texto);
   u.lang = 'es-ES';
-  u.rate = 1.05;
-  const vozEs = speechSynthesis.getVoices().find(v => v.lang.startsWith('es'));
-  if (vozEs) u.voice = vozEs;
+
+  u.rate = parseFloat(localStorage.getItem('app_rate')) || 1;
+  u.pitch = parseFloat(localStorage.getItem('app_tono')) || 1;
+
+  const vozEs = speechSynthesis.getVoices();
+  const nombreVozGuardada = localStorage.getItem('app_voz');
+  
+  let vozSeleccionada = null;
+  if (nombreVozGuardada && nombreVozGuardada !== 'default') {
+    vozSeleccionada = vozEs.find(v => v.name === nombreVozGuardada);
+  }
+  if (!vozSeleccionada) {
+    vozSeleccionada = vozEs.find(v => v.lang.startsWith('es'));
+  }
+  if (vozSeleccionada) {
+    u.voice = vozSeleccionada;
+  }
+  
   speechSynthesis.speak(u);
 }
 
@@ -1049,6 +1206,17 @@ function mostrarTicketBizum(destinatario, importe, concepto) {
 }
 
 /* ── Funciones de Personalización y Configuración ──────── */
+function abrirConfigVoice() {
+  document.getElementById('input-pitch').value = localStorage.getItem('app_tono') || 1;
+  document.getElementById('input-rate').value = localStorage.getItem('app_rate') || 1;
+  document.getElementById('select-voice').value = localStorage.getItem('app_voz')
+  document.getElementById('config-voice').classList.remove('oculto');
+}
+
+function cerrarConfigVoice() {
+  document.getElementById('config-voice').classList.add('oculto');
+}
+
 function abrirConfig() {
   document.getElementById('input-perfil').value = localStorage.getItem('app_perfil') || 'Cliente Personal';
   document.getElementById('select-color').value = localStorage.getItem('app_color') || 'verde';
@@ -1071,6 +1239,13 @@ function guardarConfig() {
 
   aplicarConfiguracionUI();
   cerrarConfig();
+}
+
+function guardarConfigVoice() {
+  localStorage.setItem('app_voz', document.getElementById('select-voice').value);
+  localStorage.setItem('app_tono', document.getElementById('input-pitch').value);
+  localStorage.setItem('app_rate', document.getElementById('input-rate').value);
+  cerrarConfigVoice();
 }
 
 
