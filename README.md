@@ -1,4 +1,4 @@
-# 🗣️ Habla con tu dinero — Asistente bancario conversacional
+# Asistente bancario conversacional
 
 **Reto IA de Unicaja & UGR** (Cátedra IA Responsable en Finanzas). Asistente bancario por **voz y texto** que consulta el saldo, envía Bizums con PIN, responde sobre el histórico de movimientos convirtiendo **lenguaje natural → SQL**, detecta pagos recurrentes, **proyecta el gasto del mes** y **decide y genera en tiempo real la tabla o el gráfico** que mejor refuerza cada respuesta, sin plantillas.
 
@@ -43,27 +43,27 @@ Abre **http://localhost:8000** (Chrome recomendado: el reconocimiento de voz del
                │ eventos JSON          │ { "mensaje": … } / { "pin": … }
                │                       ▼
 ┌──────────────┴──────────── BACKEND (FastAPI) ────────────────────────────┐
-│  main.py ──▶ agent.py  «bucle agéntico»                                  │
-│              │  qwen3:8b vía Ollama + historial + streaming por frases    │
-│              │                                                            │
-│              ├─▶ atajos deterministas: saldo, Bizum (regex), PIN          │
-│              │                                                            │
-│              ▼ tool calling (tools.py) — 6 herramientas                   │
-│   ┌───────────────┬──────────────┬───────────────┬────────────────────┐  │
-│   │consultar_saldo│ enviar_bizum │ consultar_    │ analizar_          │  │
-│   │listar_contac. │              │ movimientos   │ suscripciones      │  │
-│   │               │              │ (text-to-SQL) │ proyectar_gasto    │  │
-│   └───────┬───────┴──────┬───────┴───────┬───────┴─────────┬──────────┘  │
-│           │banking_api.py│               │ database.py     │ analitica.py│
-│           ▼              ▼               ▼ (solo lectura)  ▼             │
-│                    SQLite banco.db  (seed.py, semilla fija)              │
-│                                                                          │
-│  graficos.py «motor visual» ──▶ tras responder, decide si hay algo que   │
-│              mostrar y le pide al LLM la tabla o el gráfico, aparte.      │
-└──────────────────────────────────────────────────────────────────────────┘
+│  main.py ──▶ agent.py  «bucle agéntico»                                   │
+│              │  qwen3:8b vía Ollama + historial + streaming por frases     │
+│              │                                                             │
+│              ├─▶ atajos deterministas: saldo, Bizum (regex), PIN           │
+│              │                                                             │
+│              ▼ tool calling (tools.py) — 6 herramientas                    │
+│   ┌───────────────┬──────────────┬───────────────┬────────────────────┐    │
+│   │consultar_saldo│ enviar_bizum │ consultar_    │ analizar_          │    │
+│   │listar_contac. │              │ movimientos   │ suscripciones      │    │
+│   │               │              │ (text-to-SQL) │ proyectar_gasto    │    │
+│   └───────┬───────┴──────┬───────┴───────┬───────┴─────────┬──────────┘    │
+│           │banking_api.py│               │ database.py     │ analitica.py  │
+│           ▼              ▼               ▼ (solo lectura)  ▼               │
+│                    SQLite banco.db  (seed.py, semilla fija)                │
+│                                                                             │
+│  graficos.py «motor visual» ──▶ tras responder, decide si hay algo que     │
+│              mostrar y le pide al LLM la tabla o el gráfico, aparte.       │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Idea central:** el razonamiento vive en el LLM, pero **lo que un modelo de 8B no hace de forma fiable se resuelve en código**. Cada decisión está donde se demostró —midiendo— que funciona mejor. Esa frontera es el diseño del proyecto y está documentada en `TODO.md` con las mediciones que la justifican.
+**Idea central:** el razonamiento vive en el LLM, pero **lo que un modelo de 8B no hace de forma fiable se resuelve en código**. Cada decisión está donde se demostró —midiendo— que funciona mejor. Esa frontera es el diseño del proyecto y está documentada en `docs` con las mediciones que la justifican.
 
 ---
 
@@ -75,10 +75,8 @@ Cada conexión WebSocket crea un `Agente` con su **historial**, que es lo que ha
 
 Por turno: se llama al LLM en streaming con el system prompt, el historial y las 6 herramientas; si pide herramientas se ejecutan, sus resultados vuelven al historial y se repite (máximo 8 iteraciones); si no, la respuesta es final.
 
-Tres detalles que salieron de medir, no de diseñar:
-
-- **Streaming por frases, no por tokens.** Es la unidad que el TTS lee sin cortar palabras. Cuidado con el punto de los millares: sin tratarlo, `"1.234,56 €"` emite *"Has gastado 1."* como si fuera una respuesta completa.
-- **Recorte del historial en frontera de turno.** Un mensaje `tool` sin el `assistant` que lo provocó deja el historial inconsistente y la API lo rechaza.
+- **Streaming por frases, no por tokens.** Es la unidad que el TTS lee sin cortar palabras.
+- **Recorte del historial en frontera de turno.**
 - **Atajos deterministas** para saldo y Bizum: se resuelven sin pasar por el LLM y ahorran ~3 s. El de saldo es deliberadamente estricto —exige que *todas* las palabras estén en una lista blanca—, porque un falso negativo solo cuesta latencia y un falso positivo da una respuesta incorrecta.
 
 ### 3.2 Text-to-SQL (`consultar_movimientos`)
@@ -92,7 +90,7 @@ El system prompt lleva el esquema de la BD, la fecha de hoy y cinco ejemplos de 
 
 **Autocorrección:** si la consulta falla, el error de SQLite se le devuelve al LLM como resultado de la herramienta y en la siguiente vuelta corrige. En la interfaz se ve el chip *"Consulta con error (la IA se autocorrige)"* seguido de la buena.
 
-El SQL generado **siempre se muestra** en un desplegable ⌕ — explicabilidad, no adorno.
+El SQL generado **siempre se muestra** en un desplegable para garantizar explicabilidad.
 
 ### 3.3 Operaciones: Bizum con PIN
 
@@ -109,18 +107,18 @@ API:      comprueba límite diario y saldo, y descuenta — todo en UNA transacc
 UI:       la píldora de saldo se actualiza al momento
 ```
 
-Cuatro cosas que importan y no se ven:
+Cuatro cosas que importantes:
 
-- **El importe se valida antes de pedir el PIN.** Pedir una clave para una operación que ya se sabe que va a fallar es mal diseño de seguridad; antes, un envío de 2.000 € recorría el flujo entero y solo fallaba después de teclearla.
+- **El importe se valida antes de pedir el PIN.** 
 - **El PIN nunca entra en el historial del LLM.** Viaja por un evento distinto (`auth_bizum`), lo valida Python, y la IA nunca lo ve.
 - **El envío es atómico.** Leer el saldo, comprobarlo y actualizarlo va dentro de una transacción `BEGIN IMMEDIATE`. Sin eso, dos envíos simultáneos leen el mismo saldo, los dos pasan la comprobación y uno pisa al otro: salen 1.200 € de una cuenta con 1.000. Está reproducido y cubierto por un test.
 - **Límite diario de 500 €** para las operaciones por chat, aparte del límite por operación.
 
 ### 3.4 Analítica avanzada (`backend/analitica.py`)
 
-**Pagos recurrentes.** *"¿A qué estoy suscrito?"* no es una consulta, es una inferencia: la recurrencia no está en ninguna columna. Lo que la delata no es el importe —el recibo de la luz varía tanto como un repostaje— sino la **regularidad de los intervalos** entre cargos. Validado contra 500 semillas distintas: 0 falsos negativos, 1 falso positivo.
+**Pagos recurrentes.** *"¿A qué estoy suscrito?"* no es una consulta, es una inferencia: la recurrencia no está en ninguna columna. Lo que la delata no es el importe sino la **regularidad de los intervalos** entre cargos. Validado contra 500 semillas distintas: 0 falsos negativos, 1 falso positivo.
 
-**Proyección de gasto** (*Analítica Predictiva* del enunciado). La regla de tres —gasto hasta hoy ÷ días × días del mes— es inservible, porque el alquiler y los recibos caen a principios de mes. Error medio sobre 23 meses del histórico:
+**Proyección de gasto**. La regla de tres —gasto hasta hoy ÷ días × días del mes— es inservible, porque el alquiler y los recibos caen a principios de mes. Error medio sobre 23 meses del histórico:
 
 | | día 5 | día 15 |
 |---|---|---|
@@ -132,17 +130,15 @@ Y **cada proyección viene con su margen de error**, calculado proyectando cada 
 
 ### 3.5 Motor visual: tabla o gráfico
 
-El enunciado pide *"gráficos y tablas"*, y la decisión se reparte así:
-
 | | quién decide |
 |---|---|
 | ¿hay algo que mostrar? | **backend**, regla determinista sobre la forma del resultado |
 | ¿tabla o gráfico? | **el LLM** |
 | ¿qué marca, ejes, columnas? ¿por qué? | **el LLM** |
 
-**Por qué el "cuándo" no lo decide el modelo:** está medido. Sobre cuatro variantes del prompt y tres vueltas de las 44 preguntas, su decisión resultó inestable ante *cualquier* edición del prompt, aunque no hablara de gráficos. Cinco de las seis preguntas que debían acabar en gráfico no pintaban nunca. Con el gate determinista: **27/27**.
+**Por qué el "cuándo" no lo decide el modelo:** está medido. Sobre cuatro variantes del prompt y tres vueltas de las 44 preguntas, su decisión resultó inestable ante *cualquier* edición del prompt, aunque no hablara de gráficos. Cinco de las seis preguntas que debían acabar en gráfico no pintaban nunca.
 
-La spec la genera el LLM entera y desde cero en una **llamada dedicada** —tarea única, prompt mínimo—, así que *sin plantillas* se mantiene: en el repositorio no hay ni una sola spec. Los datos los inyecta el backend, que ya los tiene: quita ~700 tokens de generación por visual y elimina de raíz que se invente cifras.
+La spec la genera el LLM entera y desde cero en una **llamada dedicada**, así que *sin plantillas* se mantiene: en el repositorio no hay ni una sola spec. Los datos los inyecta el backend, que ya los tiene: quita ~700 tokens de generación por visual y elimina de raíz que se invente cifras.
 
 Esa llamada va **después** de `fin_respuesta`, que es lo que dispara el TTS: el usuario oye la respuesta de inmediato y el visual aparece mientras la escucha, con un indicador de que se está preparando.
 
@@ -179,7 +175,7 @@ Cliente → servidor: `{"mensaje": …}` y `{"type": "auth_bizum", "pin": …}`.
 
 ## 4. Cómo se mide (`tests/`)
 
-Nada de lo de arriba se afirma sin medirlo. Tres suites:
+Nada de lo de arriba se afirma sin medirlo. Tres batches de test:
 
 ```bash
 python -m tests.test_bizum          # 35 comprobaciones del flujo de dinero. Sin LLM, ~10 s
@@ -200,8 +196,6 @@ Los valores esperados se recalculan desde la BD en cada ejecución, así que no 
 | Refuerzo visual cuando toca | **27/27** |
 | Specs que llegan a pintarse | **21/21** |
 | Latencia hasta la voz (mediana) | **3,3 s** |
-
-> **No compares configuraciones con una sola vuelta.** La varianza de qwen3:8b es de ±1 caso; una diferencia de 2 en un pase suelto es ruido. Usa `--repeticiones 3`.
 
 ---
 
@@ -243,8 +237,6 @@ banco-conversacional/
     ├── test_bizum.py      ← flujo de dinero, determinista
     └── test_recurrencia.py← detector contra N semillas
 ```
-
-`TODO.md` lleva lo que queda por hacer y las decisiones abiertas, con las mediciones que las respaldan.
 
 ---
 
