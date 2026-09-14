@@ -28,9 +28,9 @@ consultas, como la del saldo, que se resuelven sin recurrir al modelo.
 Otro es la posición del motor visual dentro del turno. La generación de la
 tabla o el gráfico no se ejecuta en paralelo con la respuesta —la memoria
 disponible en la tarjeta gráfica no permite atender dos peticiones simultáneas
-al modelo—, sino después del evento \texttt{fin\_respuesta}, que es el que
-activa la síntesis de voz. De este modo la generación queda fuera del camino
-crítico: el usuario escucha la respuesta de inmediato y el elemento visual
+al modelo—, sino después del evento \texttt{fin\_respuesta}, cuando el texto
+ya se ha emitido y la síntesis de voz, que arranca con la primera frase, está en
+marcha. De este modo la generación queda fuera del camino crítico: el usuario escucha la respuesta de inmediato y el elemento visual
 aparece mientras la está oyendo, acompañado de un indicador de que se está
 preparando. En las pruebas realizadas, este cambio redujo el tiempo hasta la
 respuesta hablada de 12,4 a 6,7 segundos en las preguntas que generan un

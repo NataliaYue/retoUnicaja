@@ -1,0 +1,66 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    actor/.style={draw=#1, fill=#1!7, rounded corners=2pt, align=center,
+                  minimum width=2.8cm, minimum height=0.95cm, inner sep=3pt},
+    actor/.default=subsectionblue,
+    vida/.style={draw=gray!45, dashed},
+    ida/.style={-{Stealth[length=2mm]}, thick, draw=gray!70!black},
+    vuelta/.style={-{Stealth[length=2mm]}, thick, dashed, draw=gray!70!black},
+    msg/.style={font=\scriptsize, above, inner sep=2pt},
+    paso/.style={draw=gray!60, fill=white, rounded corners=2pt, font=\scriptsize,
+                 align=center, inner sep=3pt},
+    nota/.style={font=\scriptsize\itshape, text=ugrred, align=right},
+]
+
+% Columnas
+\def\N{0}     % navegador
+\def\B{4.2}   % backend
+\def\L{8.4}   % modelo
+\def\H{12.6}  % herramientas y BD
+
+% Tramo posterior a la respuesta
+\fill[subsectionblue!6, rounded corners=3pt] (-1.5,-9.5) rectangle (14.1,-13.65);
+
+% Líneas de vida
+\foreach \x in {\N,\B,\L,\H} \draw[vida] (\x,-0.5) -- (\x,-13.65);
+
+\node[font=\scriptsize\bfseries, text=subsectionblue, anchor=north east, align=right,
+      fill=subsectionblue!6, inner sep=2pt]
+     at (14.0,-9.6) {Después de \texttt{fin\_respuesta}:\\el usuario ya está oyendo la respuesta};
+
+% Cabeceras
+\node[actor]        at (\N,0) {Navegador};
+\node[actor]        at (\B,0) {Backend\\[-1pt]\scriptsize\texttt{agent.py}};
+\node[actor=ugrred] at (\L,0) {Modelo\\[-1pt]\scriptsize\texttt{qwen3:8b}};
+\node[actor=gray]   at (\H,0) {Herramientas\\[-1pt]\scriptsize y base de datos};
+
+% --- Respuesta ------------------------------------------------------------
+\draw[ida]    (\N,-1.0) -- node[msg] {pregunta}                          (\B,-1.0);
+\node[paso]   at (\B,-1.8) {atajos deterministas (saldo, Bizum): no aplican};
+\draw[ida]    (\B,-2.6) -- node[msg] {prompt + historial + herramientas} (\L,-2.6);
+\draw[vuelta] (\L,-3.4) -- node[msg] {pide \texttt{consultar\_movimientos}} (\B,-3.4);
+\draw[ida]    (\B,-4.2) -- node[msg] {\texttt{tool\_inicio}, \texttt{sql}} (\N,-4.2);
+\draw[ida]    (\B,-5.0) -- node[msg] {SQL en solo lectura}               (\H,-5.0);
+\draw[vuelta] (\H,-5.8) -- node[msg] {filas}                             (\B,-5.8);
+\draw[ida]    (\B,-6.6) -- node[msg] {resultado de la herramienta}       (\L,-6.6);
+\draw[vuelta] (\L,-7.4) -- node[msg] {respuesta en \textit{streaming}}   (\B,-7.4);
+\draw[ida]    (\B,-8.2) -- node[msg] {\texttt{texto}, una frase por evento} (\N,-8.2);
+\node[nota, anchor=east] at (\N-0.1,-8.2) {la voz\\empieza};
+\draw[ida]    (\B,-9.0) -- node[msg] {\texttt{fin\_respuesta}}           (\N,-9.0);
+
+% --- Motor visual ---------------------------------------------------------
+\node[paso]   at (\B,-10.1) {¿hay algo que mostrar?\\regla determinista: sí};
+\draw[ida]    (\B,-11.0) -- node[msg] {\texttt{visual\_generando}}        (\N,-11.0);
+\draw[ida]    (\B,-11.8) -- node[msg] {llamada dedicada (3 filas)} (\L,-11.8);
+\draw[vuelta] (\L,-12.5) -- node[msg] {tipo, spec sin datos y motivo}    (\B,-12.5);
+\draw[ida]    (\B,-13.25) -- node[msg] {\texttt{grafico} con datos} (\N,-13.25);
+
+\end{tikzpicture}
+\caption{Secuencia de un turno con consulta al histórico y gráfico. La voz
+empieza con la primera frase del texto. El motor visual solo se ejecuta cuando
+la respuesta ya está completa, de modo que la segunda llamada al modelo no
+retrasa lo que el usuario oye.}
+\label{fig:turno}
+\end{figure}

@@ -65,9 +65,10 @@ se compara el texto de la consulta: existen muchas consultas correctas
 distintas para la misma pregunta.
 
 La latencia se mide en dos tramos. El relevante es el tiempo hasta el evento
-\texttt{fin\_respuesta}, que es el que activa la síntesis de voz y por tanto lo
-que el usuario percibe como demora. El motor visual se ejecuta después de ese
-evento de forma deliberada, así que contabilizar únicamente el tiempo total
+\texttt{fin\_respuesta}, en el que el texto de la respuesta ya está completo. Es
+una cota superior de la espera que percibe el usuario, porque la síntesis de voz
+empieza antes, con la primera frase recibida. El motor visual se ejecuta después
+de ese evento de forma deliberada, así que contabilizar únicamente el tiempo total
 penalizaría un trabajo que ya no bloquea la respuesta.
 
 \subsection{Resultados}

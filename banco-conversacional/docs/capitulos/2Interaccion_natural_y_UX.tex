@@ -22,6 +22,13 @@ continúa en segundo plano. De esta forma, la generación de la respuesta y la
 actualización de los distintos elementos de la interfaz pueden realizarse de
 forma progresiva.
 
+La Figura~\ref{fig:turno} recoge la secuencia completa de un turno en el que
+el usuario hace una consulta sobre su histórico. El texto llega frase a frase y
+la síntesis de voz empieza con la primera; la tabla o el gráfico se generan en
+un tramo posterior, cuando la respuesta ya está completa.
+
+\input{figuras/fig_turno}
+
 \subsection{Interfaz adaptativa y accesible}
 
 La interfaz se adapta al tipo de información que se obtiene en cada consulta.
@@ -51,10 +58,13 @@ Cuando corresponde, esa generación no se ejecuta en paralelo con la respuesta:
 la memoria disponible en la tarjeta gráfica no permite atender dos peticiones
 simultáneas al modelo, por lo que el servidor las atendería igualmente una
 detrás de otra. Lo que se hace es situarla fuera del camino crítico,
-ejecutándola después del evento \texttt{fin\_respuesta}, que es el que activa la
-síntesis de voz. El usuario escucha la respuesta de inmediato y el elemento
-visual aparece mientras la está oyendo, precedido de un indicador de que se
-está preparando.
+ejecutándola después del evento \texttt{fin\_respuesta}, cuando el texto de la
+respuesta ya se ha emitido entero. La síntesis de voz no espera a ese evento:
+empieza con la primera frase que llega. Cuando el modelo llamaba él mismo a la
+herramienta visual, lo hacía antes de escribir el texto, y la voz tenía que
+esperar a que terminara esa generación. Ahora el usuario escucha la respuesta
+de inmediato y el elemento visual aparece mientras la está oyendo, precedido de
+un indicador de que se está preparando.
 
 Con este cambio, el tiempo hasta la respuesta hablada se redujo de 12,4 a
 aproximadamente 6,7 segundos en las preguntas que generan un elemento visual.

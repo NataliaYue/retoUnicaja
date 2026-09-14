@@ -1,0 +1,77 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    caja/.style={draw=#1, fill=#1!7, rounded corners=2pt, align=center,
+                 minimum width=2.9cm, minimum height=0.95cm, inner sep=3pt},
+    proceso/.style={caja=subsectionblue},
+    exito/.style={draw=subsectionblue, fill=subsectionblue!20, rounded corners=2pt,
+                  align=center, minimum width=2.9cm, minimum height=0.95cm,
+                  inner sep=3pt, thick},
+    rechazo/.style={caja=ugrred},
+    aviso/.style={caja=gray},
+    decision/.style={chamfered rectangle, chamfered rectangle xsep=4pt,
+                     draw=gray!70!black, fill=gray!8, align=center,
+                     minimum width=2.9cm, minimum height=0.9cm, inner sep=3pt},
+    flecha/.style={-{Stealth[length=2mm]}, thick, draw=gray!70!black},
+    et/.style={font=\scriptsize, text=gray!55!black, inner sep=2pt},
+]
+
+% --- Camino principal ------------------------------------------------------
+\node[proceso] (ini) at (0,0)
+      {Petición de Bizum\\[-1pt]\scriptsize regex del backend o \textit{tool call} del LLM};
+\node[decision] (d1) at (0,-1.8)  {¿Indica el importe?};
+\node[decision] (d2) at (0,-3.6)  {¿Entre 0,50 y 1.000 €?};
+\node[decision] (d3) at (0,-5.4)  {¿Existe el contacto?};
+\node[proceso]  (pe) at (0,-7.2)
+      {Bizum pendiente\\[-1pt]\scriptsize evento \texttt{pedir\_pin}};
+\node[decision] (d4) at (0,-9.0)  {¿PIN correcto?};
+\node[proceso]  (tx) at (0,-10.8)
+      {Transacción \texttt{BEGIN IMMEDIATE}\\[-1pt]\scriptsize límite diario de 500 € y saldo};
+\node[exito]    (ok) at (0,-12.6)
+      {Descuenta el saldo\\[-1pt]\scriptsize eventos \texttt{saldo} y ticket};
+
+\draw[flecha] (ini) -- (d1);
+\draw[flecha] (d1) -- node[et, right] {sí} (d2);
+\draw[flecha] (d2) -- node[et, right] {sí} (d3);
+\draw[flecha] (d3) -- node[et, right] {sí} (pe);
+\draw[flecha] (pe) -- (d4);
+\draw[flecha] (d4) -- node[et, right] {sí} (tx);
+\draw[flecha] (tx) -- node[et, right] {cabe} (ok);
+
+% --- Salidas a la derecha --------------------------------------------------
+\node[aviso]   (r1) at (5.6,-1.8)  {Pregunta el importe\\[-1pt]\scriptsize no deja nada pendiente};
+\node[rechazo] (r2) at (5.6,-3.6)  {Rechaza\\[-1pt]\scriptsize sin pedir el PIN};
+\node[rechazo] (r3) at (5.6,-5.4)  {Avisa y termina};
+\node[aviso]   (r4) at (5.6,-9.0)  {Resta un intento\\[-1pt]\scriptsize 3 como máximo};
+\node[rechazo] (c4) at (5.6,-10.8) {Cancela el envío};
+
+\draw[flecha] (d1) -- node[et, above] {no} (r1);
+\draw[flecha] (d2) -- node[et, above] {no} (r2);
+\draw[flecha] (d3) -- node[et, above] {ninguno} (r3);
+\draw[flecha] (d4) -- node[et, above] {no} (r4);
+\draw[flecha] (r4.north) |- node[et, right, pos=0.25] {quedan intentos} (pe.east);
+\draw[flecha] (r4) -- node[et, right] {sin intentos} (c4);
+
+% --- Salidas a la izquierda ------------------------------------------------
+\node[decision] (sg) at (-5.6,-5.4)  {¿Querías decir…?};
+\node[rechazo]  (c3) at (-5.6,-3.6)  {Cancela};
+\node[rechazo]  (r5) at (-5.6,-10.8) {Rechaza\\[-1pt]\scriptsize la BD no cambia};
+
+\draw[flecha] (d3) -- node[et, above] {parecido} (sg);
+\draw[flecha] (sg) -- node[et, right] {no} (c3);
+\draw[flecha] (sg.south) |- node[et, right, pos=0.25] {sí} (pe.west);
+\draw[flecha] (tx) -- node[et, above] {no cabe} (r5);
+
+% --- Nota sobre el PIN -----------------------------------------------------
+\node[font=\scriptsize, text=ugrred, align=center, draw=ugrred!60, dashed,
+      rounded corners=2pt, inner sep=4pt] at (-5.6,-8.6)
+      {El PIN viaja por el evento\\\texttt{auth\_bizum}: el modelo\\nunca lo recibe};
+
+\end{tikzpicture}
+\caption{Flujo de un envío de Bizum. Todas las comprobaciones se hacen en el
+backend y en este orden: el importe se valida antes de pedir el PIN, y el
+límite diario y el saldo se comprueban dentro de la misma transacción que los
+descuenta.}
+\label{fig:bizum}
+\end{figure}

@@ -1,0 +1,76 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    comp/.style={draw=#1, fill=#1!7, rounded corners=2pt, align=center,
+                 minimum width=3.2cm, minimum height=1.05cm,
+                 inner sep=3pt},
+    comp/.default=subsectionblue,
+    grupo/.style={draw=gray!55, dashed, rounded corners=5pt, inner sep=7pt},
+    titulo/.style={font=\footnotesize\bfseries, text=gray!65!black},
+    flecha/.style={-{Stealth[length=2mm]}, thick, draw=gray!70!black},
+    doble/.style={{Stealth[length=2mm]}-{Stealth[length=2mm]}, thick,
+                  draw=gray!70!black},
+    nota/.style={font=\scriptsize, text=gray!55!black, align=center},
+]
+
+% --- Navegador -------------------------------------------------------------
+\node[comp] (voz)  at (-5.4, 0) {Voz\\[-1pt]\scriptsize STT y TTS};
+\node[comp] (chat) at (-1.8, 0) {Chat\\[-1pt]\scriptsize texto por frases};
+\node[comp] (vis)  at ( 1.8, 0) {Visuales\\[-1pt]\scriptsize Vega-Lite y tablas};
+\node[comp] (pin)  at ( 5.4, 0) {Teclado del PIN\\[-1pt]\scriptsize evento aparte};
+
+\begin{scope}[on background layer]
+  \node[grupo, fit=(voz)(pin),
+        label={[titulo, anchor=south west]north west:Navegador · \texttt{index.html}}]
+        (nav) {};
+\end{scope}
+
+% --- Backend ---------------------------------------------------------------
+\node[comp] (main) at (-5.4, -3.1) {\texttt{main.py}\\[-1pt]\scriptsize FastAPI};
+\node[comp] (ag)   at (-1.8, -3.1) {\texttt{agent.py}\\[-1pt]\scriptsize bucle agéntico};
+\node[comp] (tl)   at (-1.8, -4.8) {\texttt{tools.py}\\[-1pt]\scriptsize 6 herramientas};
+\node[comp] (gr)   at ( 1.8, -4.8) {\texttt{graficos.py}\\[-1pt]\scriptsize motor visual};
+
+\node[comp] (db)   at (-5.4, -6.5) {\texttt{database.py}\\[-1pt]\scriptsize SQL del LLM};
+\node[comp] (api)  at (-1.8, -6.5) {\texttt{banking\_api.py}\\[-1pt]\scriptsize saldo y Bizum};
+\node[comp] (an)   at ( 1.8, -6.5) {\texttt{analitica.py}\\[-1pt]\scriptsize recurrencia y previsión};
+
+\begin{scope}[on background layer]
+  \node[grupo, fit=(main)(gr)(db)(an),
+        label={[titulo, anchor=south east]north east:Backend · Python}]
+        (back) {};
+\end{scope}
+
+% --- Modelo y datos --------------------------------------------------------
+\node[comp=ugrred, minimum height=1.3cm] (llm) at (6.1, -3.1)
+      {Ollama\\[-1pt]\scriptsize \texttt{qwen3:8b} en GPU local};
+
+\node[comp=gray, minimum width=10.4cm] (bd) at (-1.8, -8.6)
+      {SQLite · \texttt{banco.db}\\[-1pt]\scriptsize 24 meses de movimientos ficticios};
+
+% --- Conexiones ------------------------------------------------------------
+\draw[doble] (main.north |- nav.south) -- node[nota, right=2pt] {WebSocket\\eventos JSON} (main.north);
+
+\draw[doble]  (main) -- (ag);
+\draw[flecha] (ag) -- (tl);
+\draw[flecha] ([yshift=-0.3cm]ag.east) -| node[nota, right, pos=0.75] {tras la\\respuesta} (gr.north);
+
+\draw[doble]  ([yshift=0.2cm]ag.east) -- node[nota, above] {llamada principal (streaming)} ([yshift=0.2cm]llm.west);
+\draw[flecha] (gr.east) -| node[nota, below right, pos=0.3] {llamada dedicada} (llm.south);
+
+\draw[flecha] (tl.south) -- ++(0,-0.4) -| (db.north);
+\draw[flecha] (tl) -- (api);
+\draw[flecha] (tl.south) -- ++(0,-0.4) -| (an.north);
+
+\draw[flecha] (db)  -- node[nota, left]  {solo lectura}               (db  |- bd.north);
+\draw[doble]  (api) -- node[nota, right] {\texttt{BEGIN IMMEDIATE}}  (api |- bd.north);
+\draw[flecha] (an)  -- node[nota, right] {lectura}                    (an  |- bd.north);
+
+\end{tikzpicture}
+\caption{Arquitectura del sistema. El modelo se ejecuta en local y el backend
+es el único que accede a la base de datos: el SQL generado por el LLM entra por
+una conexión de solo lectura, y las escrituras solo se hacen desde las APIs
+bancarias, dentro de una transacción.}
+\label{fig:arquitectura}
+\end{figure}
