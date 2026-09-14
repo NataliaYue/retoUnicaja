@@ -144,7 +144,7 @@ Y **cada proyección viene con su margen de error**, calculado proyectando cada 
 
 La spec la genera el LLM entera y desde cero en una **llamada dedicada**, así que *sin plantillas* se mantiene: en el repositorio no hay ni una sola spec. Los datos los inyecta el backend, que ya los tiene: quita ~700 tokens de generación por visual y elimina de raíz que se invente cifras.
 
-Esa llamada va **después** de `fin_respuesta`, que es lo que dispara el TTS: el usuario oye la respuesta de inmediato y el visual aparece mientras la escucha, con un indicador de que se está preparando.
+Esa llamada va **después** de `fin_respuesta`, cuando el texto ya se ha emitido entero. El TTS no espera a ese evento: arranca con la primera frase. Así el usuario oye la respuesta de inmediato y el visual aparece mientras la escucha, con un indicador de que se está preparando.
 
 ### 3.6 Voz
 
