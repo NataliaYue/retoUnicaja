@@ -1,0 +1,90 @@
+\section{Reparto del trabajo}
+
+El desarrollo se ha organizado de forma que cada integrante asumiera la
+responsabilidad principal de un conjunto de áreas del proyecto. La
+Tabla~\ref{tab:reparto} lo resume y los apartados siguientes lo detallan.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lp{8.6cm}}
+\toprule
+\textbf{Integrante} & \textbf{Áreas principales} \\
+\midrule
+Pablo Martín Palomino
+    & Base del agente y modelo local, motor visual, analítica avanzada,
+      evaluación y robustez del flujo de Bizum \\[0.2cm]
+Natalia Yue Gallardo Pretel
+    & Flujo conversacional de Bizum, seguridad y experiencia en la interfaz,
+      y redacción de la memoria \\[0.2cm]
+Pablo Reyes Sousa
+    & Interacción por voz y personalización de la voz del asistente \\
+\bottomrule
+\end{tabular}
+\caption{Resumen del reparto del trabajo.}
+\label{tab:reparto}
+\end{table}
+
+\subsection{Pablo Martín Palomino}
+
+\begin{itemize}
+    \item Base inicial del proyecto: servidor FastAPI con WebSocket, ejecución
+    de consultas SQL en modo solo lectura, primeros gráficos con Vega-Lite y
+    voz en el navegador.
+    \item Planificación del trabajo y migración a un modelo local
+    (\texttt{qwen3:8b} sobre Ollama), incluido el script de arranque que amplía
+    el contexto a 8192 tokens.
+    \item Detección de pagos recurrentes y control del tamaño del contexto del
+    modelo.
+    \item Proyección del gasto a fin de mes, con el margen de error de cada
+    categoría medido sobre el histórico.
+    \item Motor visual: llamada dedicada para generar la especificación,
+    decisión determinista en el backend sobre cuándo mostrar un elemento visual
+    y tablas como segunda representación.
+    \item Banco de evaluación de 44 preguntas y pruebas automáticas del flujo
+    de Bizum y del detector de recurrencia.
+    \item Robustez del flujo de Bizum: validación del importe antes de pedir el
+    PIN, unificación de las dos vías de entrada, transacción
+    \texttt{BEGIN IMMEDIATE} y acceso a la base de datos fuera del bucle de
+    eventos.
+    \item Reducción de la latencia: \textit{streaming} por frases, recorte del
+    \textit{system prompt} y generación visual posterior a la respuesta hablada.
+    \item Documentación del repositorio en español e inglés.
+\end{itemize}
+
+\subsection{Natalia Yue Gallardo Pretel}
+
+\begin{itemize}
+    \item Atajo para consultar el saldo sin llamar al modelo y reducción del
+    número de tokens y llamadas por respuesta.
+    \item Flujo conversacional de Bizum: validación del contacto, herramienta de
+    contactos, importe opcional y normalización de las respuestas afirmativas y
+    negativas en la confirmación.
+    \item Primera versión del historial de conversación y corrección de las
+    consultas de gasto, incluida la eliminación del formato Markdown en las
+    respuestas.
+    \item Capa de seguridad en la interfaz: pantalla de acceso, teclado numérico
+    para el PIN y aviso de los intentos restantes.
+    \item Experiencia de usuario: justificante de Bizum con concepto,
+    personalización del perfil, del color y del tamaño de letra, y logotipos de
+    los comercios en las tablas.
+    \item Estructura de la memoria en \LaTeX{}, portada y redacción de los
+    capítulos.
+\end{itemize}
+
+\subsection{Pablo Reyes Sousa}
+
+\begin{itemize}
+    \item Mejora de la interacción por voz: activación del micrófono con la
+    barra espaciadora e indicador visual de que la lectura en voz alta está
+    activada.
+    \item Panel de personalización de la voz del asistente: elección entre las
+    voces disponibles en español, ajuste del tono y de la velocidad, y prueba de
+    la configuración antes de guardarla.
+\end{itemize}
+
+\subsection{Uso de asistentes de IA}
+
+Durante el desarrollo se han utilizado asistentes de programación basados en
+inteligencia artificial como apoyo en la escritura y revisión de código, la
+depuración de errores, la redacción de documentación y la generación del
+catálogo de comercios de los datos ficticios. Su uso ha estado siempre sujeto a la revisión del equipo.
