@@ -167,10 +167,10 @@ async def ejecutar_caso(caso: dict, Agente, ejecutar_sql_seguro, detectar_pagos,
         await agente.procesar(turno)
     latencia = time.perf_counter() - inicio
 
-    # Agilidad percibida: cuándo se emite `fin_respuesta`, que es el evento que
-    # dispara el TTS en el frontend. Es lo que el usuario experimenta como
-    # "cuánto tarda". El gráfico del motor visual llega después a propósito, así
-    # que entra en `latencia` pero no en esta.
+    # Agilidad percibida: cuándo se emite `fin_respuesta`, con el texto completo.
+    # Es una cota superior: el frontend empieza a hablar con la primera frase.
+    # El gráfico del motor visual llega después a propósito, así que entra en
+    # `latencia` pero no en esta.
     latencia_voz = next(
         (t - inicio for e, t in zip(reversed(eventos), reversed(instantes))
          if e["type"] == "fin_respuesta"),
