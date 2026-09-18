@@ -113,6 +113,78 @@ async def websocket_chat(ws: WebSocket):
                     if pin:
                         # Este método aísla la contraseña del LLM
                         await agente.validar_pin_bizum(pin)
+                
+                elif tipo_evento == "imagen":
+                    import os
+                    import base64
+                    import tempfile
+                    from .ocr import procesar_archivo_recibo
+
+                    datos_b64 = datos_ws.get("base64", "")
+                    
+                    if datos_b64 and "," in datos_b64:
+                        contenido = base64.b64decode(datos_b64.split(",")[1])
+                        
+                        # Crear archivo temporal
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                            tmp.write(contenido)
+                            tmp_path = tmp.name
+
+                        try:
+                            # Procesar la imagen
+                            resultado_ocr = await asyncio.to_thread(procesar_archivo_recibo, tmp_path)
+                            
+                            if resultado_ocr.get("estado") == "ok":
+                                texto_recibo = resultado_ocr["texto"]
+                                
+                                prompt_usuario = (
+                                    "Acabo de subir un recibo. Actúa como un extractor de datos, "
+                                    "ignora todo el texto irrelevante o legal y extrae estrictamente "
+                                    "esta información del siguiente bloque de texto:\n"
+                                    f"\"\"\"\n{texto_recibo}\n\"\"\"\n"
+                                    "Dime únicamente:\n"
+                                    "- Comercio.\n"
+                                    "- Importe total a pagar (busca el valor definitivo).\n"
+                                    "- Categoría del gasto.\n"
+                                    "Responde de forma natural pero muy breve."
+                                )
+                            else:
+                                prompt_usuario = (
+                                    f"He intentado subir un recibo pero no se ha podido leer: "
+                                    f"{resultado_ocr.get('motivo')}."
+                                )
+                                
+                            if resultado_ocr.get("estado") == "ok":
+                                texto_recibo = resultado_ocr["texto"]
+                                
+                                print("\n" + "="*40)
+                                print("✅ TEXTO EXTRAÍDO POR TESSERACT:")
+                                print(texto_recibo)
+                                print("="*40 + "\n")
+
+                                prompt_usuario = (
+                                    f"He subido una imagen de un recibo. Este es el texto extraído:\n"
+                                    f"\"\"\"\n{texto_recibo}\n\"\"\"\n"
+                                    f"Por favor, dime de qué comercio es, el importe total y a qué categoría corresponde."
+                                )
+                            else:
+                                motivo_error = resultado_ocr.get('motivo')
+                                
+                                print("\n" + "="*40)
+                                print("❌ ERROR EN TESSERACT:")
+                                print(motivo_error)
+                                print("="*40 + "\n")
+
+                                prompt_usuario = (
+                                    f"He intentado subir un recibo pero no se ha podido leer: {motivo_error}."
+                                )
+
+                            await agente.procesar(prompt_usuario)
+
+                        finally:
+                            # Limpieza del archivo temporal usando 'os'
+                            if os.path.exists(tmp_path):
+                                os.remove(tmp_path)
 
             except WebSocketDisconnect:
                 raise

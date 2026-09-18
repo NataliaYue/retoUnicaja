@@ -2,3 +2,5 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 openai>=1.14.0
 python-dotenv>=1.0
+pytesseract>=0.3.10
+pillow>=10.2.0

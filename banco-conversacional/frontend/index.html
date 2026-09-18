@@ -514,6 +514,8 @@
 <footer>
   <div class="entrada">
     <input id="input" type="text" placeholder="Escribe o pulsa el micrófono…" autocomplete="off">
+    <input type="file" id="inputFile" accept="image/*,.pdf" style="display: none;" onchange="subirImagen(event)">
+    <button type="button" title="Subir recibo o imagen" onclick="document.getElementById('inputFile').click()">🖇️</button>
     <button class="tts" id="btnTts" title="Leer respuestas en voz alta">🔊</button>
     <button class="mic" id="btnMic" title="Hablar">🎙️</button>
     <button class="enviar" id="btnEnviar" title="Enviar">➤</button>
@@ -1388,6 +1390,32 @@ function obtenerFaviconComercio(comercio) {
     } else {
         return `<img src="${avatarIniciales}" width="16" height="16" style="vertical-align: middle; margin-right: 8px; border-radius: 50%;">`;
     }
+}
+
+function subirImagen(event) {
+  const archivo = event.target.files[0];
+  if (!archivo) return;
+
+  const lector = new FileReader();
+  lector.onload = function(e) {
+    const base64Data = e.target.result;
+    
+    const burbuja = document.createElement('div');
+    burbuja.className = 'msg usuario';
+    burbuja.innerHTML = `📎 [Documento adjuntado: ${archivo.name}]`;
+    chat.appendChild(burbuja);
+    bajar();
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ 
+        type: 'imagen', 
+        base64: base64Data,
+        nombre: archivo.name 
+      }));
+    }
+  };
+  lector.readAsDataURL(archivo);
+  event.target.value = '';
 }
 </script>
 </body>

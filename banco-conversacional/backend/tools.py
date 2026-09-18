@@ -230,7 +230,8 @@ TOOLS = [
             "properties": {}, 
             "required": []
         },
-    },
+    }, 
+
     
 ]
 
@@ -410,7 +411,7 @@ async def ejecutar_tool(nombre: str, entrada: dict, emitir) -> str:
         })
 
         return json.dumps(payload_tabla, ensure_ascii=False)
-
+    
     return json.dumps({"error": f"Herramienta desconocida: {nombre}"})
 
 
