@@ -2,36 +2,32 @@
 
 \subsection{Generación de un histórico realista}
 
-Para realizar las pruebas del asistente es necesario disponer de un conjunto de
-datos que permita representar diferentes situaciones financieras. Para ello, el
-proyecto incluye un script de generación sintética, \texttt{seed.py}, que crea
+Para evaluar el asistente en escenarios financieros verosímiles, necesitamos un 
+conjunto de datos suficientemente rico. Para ello, el proyecto incluye un módulo 
+de generación sintética, \texttt{seed.py}, que crea
 un histórico de operaciones correspondiente a un periodo de 24 meses.
 
-El generador utiliza una semilla determinista mediante
-\texttt{random.seed(42)}, lo que permite obtener siempre los mismos datos a
-partir de una misma configuración. Esto facilita tanto el desarrollo como la
+El algoritmo de generación es completamente determinista, inicializado con
+\texttt{random.seed(42)}. Esto facilita tanto el desarrollo como la
 repetición de las pruebas, ya que los resultados se pueden comparar sobre un
 conjunto de datos conocido.
 
-Los datos generados no se limitan a operaciones aleatorias, sino que incluyen
-diferentes tipos de movimientos y patrones que permiten probar las consultas
-del asistente. Entre ellos se encuentran:
+Los datos generados simulan patrones de consumo realistas que exigen distintos 
+niveles de complejidad analítica por parte del asistente:
 
 \begin{itemize}
-    \item \textbf{Gastos periódicos y variables:} se generan recibos con
-    distintas periodicidades, como pagos mensuales o bimestrales, junto con
-    gastos variables relacionados con categorías como supermercado o
-    combustible.
+    \item \textbf{Gastos recurrentes y variables:} se combinan cargos fijos y regualres 
+    \item (como el aquiler, la luz o el agua) con transacciones con alta variabilidad 
+    (compras en supermercados, repostaje en gasolineras, restaurantes, etc.).
 
     \item \textbf{Pagos con periodicidad anual:} se incluyen operaciones
     separadas por periodos de tiempo más amplios, como la renovación anual del
     seguro del coche. Esto permite comprobar el funcionamiento de las consultas
     que requieren aplicar filtros sobre periodos de tiempo extensos.
 
-    \item \textbf{Cambios en los gastos:} se introducen modificaciones en
-    determinadas operaciones a lo largo del histórico. Por ejemplo, una
-    suscripción puede aumentar su precio a mitad del periodo, permitiendo
-    comprobar si el sistema es capaz de identificar este tipo de variaciones.
+    \item \textbf{Cambios en los gastos:} e simulan subidas de cuota a mitad del histórico, 
+    como incrementos documentados en el precio de plataformas de 
+    \textit{streaming} para comprobar si el sistema es capaz de reconocer dicho incremento.
 \end{itemize}
 
 De esta forma, la base de datos proporciona un conjunto de pruebas más variado
