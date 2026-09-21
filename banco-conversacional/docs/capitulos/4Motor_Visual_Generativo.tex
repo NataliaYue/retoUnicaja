@@ -27,8 +27,8 @@ El comportamiento del asistente y las reglas que debe seguir se definen en un
 Este texto no es estático, sino que se genera cada vez que arranca la aplicación 
 para poder incluir información actualizada. Por ejemplo, le pasamos la fecha de 
 hoy usando \texttt{date.today().isoformat()} para que el modelo entienda a qué 
-nos referimos cuando le preguntamos por los gastos de "este mes" o 
-"la semana pasada". También le adjuntamos la estructura de la base de datos 
+nos referimos cuando le preguntamos por los gastos de este mes o 
+la semana pasada. También le adjuntamos la estructura de la base de datos 
 (\texttt{ESQUEMA\_BD}) para que sepa qué tablas y columnas existen cuando tenga 
 que crear consultas SQL.
 
@@ -53,7 +53,8 @@ y no depender de suscripciones o servicios en la nube hemos utilizado Ollama.
 
 El problema que tenemos es que las herramientas en \texttt{tools.py} las están 
 definidas usando la estructura de Anthropic, pero Ollama no soporta directamente 
-este formato. 
+este formato (esto pues empezamos el proyecto pensando que usariamos API de Claude 
+pero finalmente decidimos priorizar el uso de un modelo local). 
 
 Para solucionarlo, en \texttt{agent.py} está la función 
 \texttt{adaptar\_herramientas\_a\_openai}, que hace de puente y traduce 
