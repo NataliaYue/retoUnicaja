@@ -1,26 +1,46 @@
 \section{Interacción Natural y Experiencia de Usuario (UX)}
 
 \subsection{Integración de voz y texto}
+El reconocimiento de voz se apoya en la API estándar del navegador
+(\textit{Speech Recognition}). El micrófono se activa pulsando un 
+botón en la interfaz o manteniendo presionada la barra espaciadora. 
+Para dar \textit{feedback} inmediato al usuario y evitar la 
+sensación de latencia, se utilizan los resultados intermedios 
+(\textit{interim results}); de este modo, el texto va apareciendo 
+en la pantalla a medida que se habla, enviándose al servidor justo 
+cuando el usuario termina la locución.
+
+Para la lectura de las respuestas se utiliza la API de síntesis de 
+voz (\textit{Speech Synthesis}). No se espera a que el 
+modelo genere todo el párrafo, sino que la emisión de audio se 
+sincroniza con el flujo de datos (\textit{streaming}) y se va 
+reproduciendo por frases completas, utilizando los signos de puntuación como 
+delimitadores. Esto soluciona problemas frecuentes de 
+lectura con cifras o decimales y evita cortes a 
+mitad de palabra. Además, el usuario puede personalizar el tono 
+(\textit{pitch}), la velocidad (\textit{rate}) y la voz del 
+asistente desde un panel de configuración, guardándose sus 
+preferencias localmente en el navegador (\textit{localStorage}).
 
 \subsection{Generación de respuestas en streaming}
 
-Las respuestas del asistente se transmiten de forma progresiva mediante una
-conexión WebSocket entre el \textit{frontend} y el \textit{backend}. De esta
-forma, el usuario no tiene que esperar a que se genere la respuesta completa
-para empezar a visualizarla, sino que recibe el contenido a medida que está
-disponible.
+Toda la comunicación en tiempo real entre el \textit{cliente} y 
+el \textit{servidor} se realiza a través de una conexión WebSocket 
+abierta de forma continua. Gracias a este canal, el usuario no 
+tiene que esperar a que el servidor procese la respuesta completa 
+para empezar a leerla, sino que los \textit{tokens} van apareciendo
+en la interfaz según los emite el modelo de lenguaje.   
 
-El uso de WebSockets permite mantener una comunicación continua entre el
-cliente y el servidor y enviar distintos tipos de información durante una
-misma interacción. Además del texto de la respuesta, por este canal pueden
-transmitirse actualizaciones relacionadas con los datos mostrados en pantalla,
-como cambios en el saldo o instrucciones para representar tablas y gráficos.
+Además del texto de la respuesta, pueden transmitirse 
+actualizaciones relacionadas con los datos mostrados en pantalla,
+como cambios en el saldo o instrucciones para representar tablas 
+y gráficos.
 
 Esta estrategia reduce el tiempo de espera percibido y permite que la interfaz
 comience a mostrar información mientras el procesamiento de la consulta
-continúa en segundo plano. De esta forma, la generación de la respuesta y la
-actualización de los distintos elementos de la interfaz pueden realizarse de
-forma progresiva.
+continúa en segundo plano. De esta forma, la generación de la 
+respuesta y la actualización de los distintos elementos de 
+la interfaz pueden realizarse de forma progresiva.
 
 La Figura~\ref{fig:turno} recoge la secuencia completa de un turno en el que
 el usuario hace una consulta sobre su histórico. El texto llega frase a frase y
@@ -31,42 +51,31 @@ un tramo posterior, cuando la respuesta ya está completa.
 
 \subsection{Interfaz adaptativa y accesible}
 
-La interfaz se adapta al tipo de información que se obtiene en cada consulta.
-Además de las respuestas en texto, el sistema puede mostrar tablas y gráficos
-cuando estos aportan información adicional al usuario. Por ejemplo, una
-consulta sobre la evolución de los gastos puede complementarse con una
-representación gráfica de los datos obtenidos.
+La interfaz no se limita a mostrar texto plano. Cuando una consulta 
+devuelve datos comparables, el sistema lo detecta y enriquece la 
+respuesta con gráficos o tablas interactivas.
 
-La generación de estos elementos visuales se ha separado del proceso principal
-de generación de la respuesta para evitar que afecte innecesariamente al tiempo
-de respuesta. Para controlar esta decisión se utiliza la variable
-\texttt{VISUALES\_AL\_LLM}, que permite configurar si la decisión de utilizar
-una herramienta visual se delega en el modelo de lenguaje o se realiza
-directamente desde el backend.
+El diseño original delegaba en el modelo de lenguaje la decisión 
+de cuándo pintar estos elementos visuales (controlado mediante 
+la variable \texttt{VISUALES\_AL\_LLM}). Sin embargo, las métricas 
+revelaron que darle esta responsabilidad al LLM bloqueaba la 
+emisión de la voz: el modelo solía detenerse a generar la compleja 
+estructura de datos del gráfico antes de empezar a redactar el 
+texto en español, lo que disparaba la latencia inicial hasta unos 12,4 segundos de media.
 
-Durante las pruebas se observó que, cuando el modelo de lenguaje podía decidir
-libremente cuándo utilizar las herramientas de generación de gráficos, la
-respuesta podía verse interrumpida para realizar dicha operación. Esto
-incrementaba la latencia hasta alcanzar aproximadamente 12,4 segundos.
+Para resolverlo, la configuración actual oculta por defecto las 
+herramientas visuales al modelo principal. Ahora es el 
+\textit{backend} quien evalúa de forma determinista el volumen y 
+tipo de los datos obtenidos en la consulta para decidir si estos 
+son graficables. Si lo son, lanza una llamada dedicada al LLM para 
+construir la especificación del gráfico, pero lo hace estrictamente
+después de emitir el evento \texttt{fin\_respuesta}. Dado que 
+la memoria de la tarjeta gráfica empleada no permite paralelizar 
+dos peticiones al LLM, esta segunda solicitud visual debe 
+esperar su turno en cola obligatoriamente.
 
-Para evitar este comportamiento, en la configuración actual las herramientas
-visuales no se exponen al modelo principal. En su lugar, el backend determina
-de forma determinista, a partir de los datos obtenidos, si es necesario generar
-una tabla o un gráfico.
-
-Cuando corresponde, esa generación no se ejecuta en paralelo con la respuesta:
-la memoria disponible en la tarjeta gráfica no permite atender dos peticiones
-simultáneas al modelo, por lo que el servidor las atendería igualmente una
-detrás de otra. Lo que se hace es situarla fuera del camino crítico,
-ejecutándola después del evento \texttt{fin\_respuesta}, cuando el texto de la
-respuesta ya se ha emitido entero. La síntesis de voz no espera a ese evento:
-empieza con la primera frase que llega. Cuando el modelo llamaba él mismo a la
-herramienta visual, lo hacía antes de escribir el texto, y la voz tenía que
-esperar a que terminara esa generación. Ahora el usuario escucha la respuesta
-de inmediato y el elemento visual aparece mientras la está oyendo, precedido de
-un indicador de que se está preparando.
-
-Con este cambio, el tiempo hasta la respuesta hablada se redujo de 12,4 a
-aproximadamente 6,7 segundos en las preguntas que generan un elemento visual.
-Además de mejorar la latencia percibida, esta separación mantiene independientes
-la generación de la respuesta y la representación visual de los datos.
+La ventaja obtenida es que el usuario escucha la respuesta hablada 
+de inmediato (el tiempo hasta la voz se redujo a unos 6,7 segundos) y, 
+mientras atiende a la explicación del asistente, la interfaz 
+muestra un indicador de carga hasta que el gráfico o la tabla 
+aparecen en pantalla. 

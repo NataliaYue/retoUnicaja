@@ -1,4 +1,4 @@
-\begin{figure}[htbp]
+\begin{figure}[!ht]
 \centering
 \begin{tikzpicture}[
     font=\small,
@@ -22,7 +22,7 @@
 
 \begin{scope}[on background layer]
   \node[grupo, fit=(voz)(pin),
-        label={[titulo, anchor=south west]north west:Navegador · \texttt{index.html}}]
+        label={[titulo, anchor=south west]north west:Interfaz · \texttt{index.html}}]
         (nav) {};
 \end{scope}
 
@@ -68,9 +68,9 @@
 \draw[flecha] (an)  -- node[nota, right] {lectura}                    (an  |- bd.north);
 
 \end{tikzpicture}
-\caption{Arquitectura del sistema. El modelo se ejecuta en local y el backend
-es el único que accede a la base de datos: el SQL generado por el LLM entra por
-una conexión de solo lectura, y las escrituras solo se hacen desde las APIs
-bancarias, dentro de una transacción.}
+ \caption{Arquitectura del sistema.} %El modelo se ejecuta en local y el backend
+% es el único que accede a la base de datos: el SQL generado por el LLM entra por
+% una conexión de solo lectura, y las escrituras solo se hacen desde las APIs
+% bancarias, dentro de una transacción.}
 \label{fig:arquitectura}
 \end{figure}

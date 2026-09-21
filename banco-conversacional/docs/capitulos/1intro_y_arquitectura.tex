@@ -2,47 +2,38 @@
 
 \subsection{Objetivos y enfoque de la solución}
 
-El proyecto ``Habla con tu dinero'' es un asistente conversacional desarrollado
-como respuesta al reto propuesto por la Cátedra de Inteligencia Artificial de la
-Universidad de Granada y Unicaja. Su objetivo principal es ofrecer al usuario
-una forma sencilla e interactiva de consultar y gestionar información
-relacionada con sus finanzas. Para ello, permite realizar consultas sobre
-cuentas, movimientos y productos financieros, además de ejecutar determinadas
-operaciones.
+El proyecto ``Habla con tu dinero'' es nuestra solución al reto propuesto por 
+la Cátedra de Inteligencia Artificial de la Universidad de Granada junto a Unicaja. 
+
+Con él, buscamos que el usuario pueda realizar consultas y operaciones financieras de 
+manera sencilla e interactiva.
 
 Para garantizar un funcionamiento fiable, se ha separado la interpretación de
-las consultas de la ejecución de las operaciones. El modelo de lenguaje se
-utiliza para interpretar las peticiones realizadas en lenguaje natural,
-identificar la intención del usuario y determinar qué información es necesaria
-para responder. Los cálculos, las consultas sobre los datos y las operaciones
-financieras se realizan directamente mediante la lógica de la aplicación.
-
-Esta separación permite controlar mejor el funcionamiento del sistema. Mientras
-que el modelo de lenguaje facilita la interacción con el usuario, el backend
+las consultas de la ejecución de las operaciones. Mientras que el modelo de lenguaje 
+facilita la interacción con el usuario, el \emph{backend}
 se encarga de obtener los datos, realizar los cálculos y ejecutar las
-operaciones correspondientes. De esta manera, las respuestas relacionadas con
-información financiera se basan siempre en los datos disponibles en la
-aplicación.
+operaciones correspondientes.
 
 \subsection{Arquitectura técnica}
 
 La aplicación se divide en tres bloques principales: la interfaz de usuario,
-el backend y la base de datos.
+el \emph{backend} y la base de datos.
+
+
 
 \begin{itemize}
 
     \item \textbf{Interfaz de usuario (Frontend):} Se ha desarrollado utilizando
-    HTML y JavaScript, sin recurrir a frameworks complejos. La comunicación con
+    HTML y JavaScript. La comunicación con
     el servidor se realiza mediante WebSockets, manteniendo una conexión abierta
     durante la interacción. Esto permite recibir las respuestas de forma
     progresiva y actualizar la interfaz dinámicamente. Además, se pueden mostrar
     elementos como gráficos, tablas y mensajes dentro de la propia conversación.
 
     \item \textbf{Motor principal (Backend):} Se ha desarrollado en Python
-    utilizando FastAPI y constituye el núcleo de la aplicación. Se encarga de
-    recibir las peticiones del usuario, gestionar el contexto de la conversación
-    y coordinar los diferentes componentes del sistema. También permite
-    resolver directamente determinadas consultas sin utilizar el modelo de
+    utilizando FastAPI. Se encarga de recibir las peticiones del usuario, gestionar 
+    el contexto de la conversación y coordinar los diferentes componentes del sistema. 
+    También permite resolver directamente determinadas consultas sin utilizar el modelo de
     lenguaje. Por ejemplo, una consulta sobre el saldo de una cuenta puede
     resolverse directamente desde el backend, reduciendo el tiempo de respuesta.
 
@@ -56,8 +47,19 @@ el backend y la base de datos.
 
 \end{itemize}
 
-La Figura~\ref{fig:arquitectura} muestra cómo se relacionan estos bloques. El
-modelo de lenguaje se ejecuta en local mediante Ollama y solo se comunica con
-el backend, que es el único componente con acceso a la base de datos.
+Como se muestra en la Figura~\ref{fig:arquitectura}, el 
+\emph{backend} se estructura de forma modular. Un controlador 
+principal (\texttt{main.py}) gestiona las conexiones y delega el 
+flujo en un agente (\texttt{agent.py}). Este agente utiliza un 
+catálogo de herramientas (\texttt{tools.py}) para derivar la 
+ejecución hacia el motor visual (\texttt{graficos.py}), la 
+lógica analítica (\texttt{analitica.py}), las APIs bancarias 
+(\texttt{banking\_api.py}) o la base de datos 
+(\texttt{database.py}). 
+
+Asimismo, el modelo de lenguaje (por defecto, Qwen3) se ejecuta 
+de forma local y privada a través de Ollama, comunicándose 
+exclusivamente con el \emph{backend} sin acceso directo a los 
+datos.
 
 \input{figuras/fig_arquitectura}

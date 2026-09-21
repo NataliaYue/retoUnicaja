@@ -2,80 +2,66 @@
 
 \subsection{Gestión del historial y prevención del desbordamiento de contexto}
 
-El modelo de lenguaje trabaja con una ventana de contexto limitada. En el caso de
-los modelos utilizados en el proyecto, esta ventana puede ser de hasta 8192
-tokens. Parte de este espacio se utiliza para las instrucciones del sistema y
-la definición de las herramientas disponibles. Por tanto, si el historial de
-una conversación crece demasiado, es necesario limitar la cantidad de mensajes
-que se mantienen en el contexto enviado al modelo.
+Los modelos de lenguaje tienen un límite en la cantidad de texto que pueden 
+recordar a la vez (lo que se conoce como ventana de contexto, que en nuestro 
+caso es de 8192 tokens). Como las instrucciones iniciales y la explicación de 
+las herramientas ya ocupan bastante espacio, es necesario controlar cuánto 
+historial de la conversación le enviamos para no saturarlo.
 
-Para gestionar esta situación, la clase \texttt{Agente}, definida en
-\texttt{agent.py}, incorpora la función \texttt{recortar\_historial}. Esta
-función limita el historial a los últimos 24 mensajes, manteniendo siempre el
-primer mensaje de la conversación, que contiene el \textit{System Prompt}.
+Para solucionar esto, la clase \texttt{Agente} (en \texttt{agent.py}) incluye una 
+función llamada \texttt{recortar\_historial} que limita la memoria a los últimos 
+24 mensajes. Este recorte no se hace de cualquier manera, sino que el sistema siempre conserva el primer mensaje (el 
+\textit{System Prompt}) y busca el inicio de una intervención del usuario 
+(\texttt{role: "user"}) para cortar a partir de ahí.   
 
-La eliminación de mensajes tampoco se realiza de forma arbitraria. El algoritmo
-busca el inicio de un turno del usuario (\texttt{role: "user"}) antes de
-recortar el historial. De esta forma, se evita eliminar únicamente una parte de
-una interacción que incluya una llamada a una herramienta y su correspondiente
-respuesta. Mantener estas partes de la conversación en el orden correcto es
-necesario para que los mensajes enviados posteriormente al modelo mantengan una
-estructura válida.
-
-De esta manera, el historial se mantiene dentro de un tamaño controlado sin
-eliminar las instrucciones principales del sistema ni romper la estructura de
-las interacciones realizadas mediante herramientas.
+De esta forma, nos aseguramos de no partir por la mitad una interacción entre el 
+modelo y una herramienta. Si cortáramos mal, el modelo podría recibir la respuesta
+de una herramienta sin saber por qué la había pedido, lo que provocaría un error 
+al intentar generar el siguiente mensaje
 
 \subsection{System Prompt dinámico y reglas de comportamiento}
 
-El comportamiento del asistente se configura mediante un \textit{System Prompt}
-definido en \texttt{config.py}. En él se establecen las instrucciones que debe
-seguir el modelo, así como la información necesaria para interpretar las
-peticiones y utilizar las herramientas disponibles.
+El comportamiento del asistente y las reglas que debe seguir se definen en un 
+\textit{System Prompt} que construimos en el archivo \texttt{config.py}.
 
-El \textit{prompt} se genera dinámicamente durante el arranque de la aplicación.
-Entre la información que se incorpora se encuentra la fecha actual, obtenida
-mediante \texttt{date.today().isoformat()}. Esto permite proporcionar al modelo
-una referencia temporal concreta para interpretar consultas que utilizan
-expresiones como ``este mes'' o ``la semana pasada''.
+Este texto no es estático, sino que se genera cada vez que arranca la aplicación 
+para poder incluir información actualizada. Por ejemplo, le pasamos la fecha de 
+hoy usando \texttt{date.today().isoformat()} para que el modelo entienda a qué 
+nos referimos cuando le preguntamos por los gastos de "este mes" o 
+"la semana pasada". También le adjuntamos la estructura de la base de datos 
+(\texttt{ESQUEMA\_BD}) para que sepa qué tablas y columnas existen cuando tenga 
+que crear consultas SQL.
 
-También se incorpora el esquema de la base de datos mediante
-\texttt{ESQUEMA\_BD}. De esta forma, el modelo dispone de información sobre las
-tablas y columnas disponibles cuando necesita generar una consulta sobre los
-datos almacenados.
 
-Además, el \textit{System Prompt} establece determinadas reglas para mantener
-un formato de respuesta consistente. Entre ellas se encuentran las indicaciones
-relacionadas con el formato de las cantidades monetarias, el tratamiento del
-usuario de forma directa y las restricciones sobre el uso de Markdown.
 
-\subsection{Uso de Tool Calling unificado}
+Además, en este \textit{prompt} le damos instrucciones claras sobre cómo debe 
+expresarse. Le pedimos que trate al usuario de tú, que formatee el dinero al 
+estilo español (por ejemplo, "1.234,56 €") y le prohibimos usar formato 
+Markdown como negritas o cursivas. Esto último es muy importante para que el 
+sistema que lee el texto en voz alta lo haga de forma natural, sin tropezar 
+leyendo símbolos.   
 
-El asistente utiliza \textit{Tool Calling} para solicitar al backend la
-ejecución de determinadas operaciones. Las herramientas disponibles se definen
-en \texttt{tools.py} mediante esquemas que especifican los argumentos que puede
-utilizar cada una. Entre estas operaciones se encuentran las consultas de
-información, el envío de Bizums y la proyección de gastos.
+\subsection{Uso de Tool Calling }
 
-Para evitar depender de un formato concreto de herramientas, el sistema incluye
-la función \texttt{adaptar\_herramientas\_a\_openai}, que adapta las definiciones
-internas al formato utilizado por las APIs compatibles con el esquema de
-OpenAI. Esto permite utilizar diferentes proveedores o modelos manteniendo la
-misma estructura de herramientas en el backend.
+Para que el modelo pueda interactuar con la aplicación, utilizamos la 
+funcionalidad de \textit{Tool Calling}. En el archivo \texttt{tools.py} 
+definimos en formato JSON una lista con todo lo que el asistente puede invocar: 
+consultar datos, preparar un envío de Bizum\dots
 
-El funcionamiento de una interacción con herramientas sigue varios pasos. En
-primer lugar, el modelo recibe la petición del usuario y determina si necesita
-utilizar alguna de las herramientas disponibles. Si es necesario, genera un
-\textit{tool call} con los argumentos correspondientes en formato JSON.
+Para ejecutar el modelo de lenguaje en local, garantizar la privacidad de los datos
+y no depender de suscripciones o servicios en la nube hemos utilizado Ollama. 
 
-El backend recibe esta petición y ejecuta la herramienta de forma local. Según
-el tipo de operación, esto puede implicar consultar la base de datos, realizar
-un cálculo o ejecutar una operación definida por la aplicación. Una vez
-obtenido el resultado, el backend lo incorpora a la conversación mediante un
-mensaje con el rol \texttt{tool}.
+El problema que tenemos es que las herramientas en \texttt{tools.py} las están 
+definidas usando la estructura de Anthropic, pero Ollama no soporta directamente 
+este formato. 
 
-Finalmente, el modelo recibe el resultado de la herramienta junto con el resto
-del contexto y genera la respuesta que se muestra al usuario. De esta forma,
-el modelo se encarga de interpretar la petición y decidir qué herramienta
-utilizar, mientras que la ejecución de las operaciones se realiza en el
-backend.
+Para solucionarlo, en \texttt{agent.py} está la función 
+\texttt{adaptar\_herramientas\_a\_openai}, que hace de puente y traduce 
+automáticamente nuestras herramientas al formato correcto antes de enviárselas al 
+modelo, permitiendo que la conexión funcione sin problemas.
+
+El proceso completo de interacción funciona como se ilustra en la Figure \ref{fig:flujo_agente}: 
+el usuario hace una pregunta, y el modelo evalúa si necesita usar alguna herramienta para responder. Si es así, interrumpe su respuesta y devuelve un mensaje especial pidiendo ejecutarla. Nuestro \emph{backend} recibe esa petición, ejecuta el código en Python (por ejemplo, hace la consulta a la base de datos) y le devuelve el resultado al modelo añadiendo un mensaje con el rol \texttt{tool}. Finalmente, el modelo lee ese resultado y ya dispone de los datos concretos para redactar la respuesta que escuchará el usuario.
+
+\input{figuras/fig_tool_calling}
+
