@@ -1,78 +1,35 @@
-\section{Motor Visual Generativo}
+\begin{figure}[!ht]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\small,
+    backend/.style={draw=subsectionblue, fill=subsectionblue!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
+    llm/.style={draw=ugrred, fill=ugrred!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
+    front/.style={draw=orange!90, fill=orange!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
+    arrow/.style={-{Stealth[length=2.5mm]}, thick, draw=gray!80!black},
+    lbl/.style={font=\scriptsize, inner sep=4pt, text=gray!80!black}
+]
 
-\subsection{Generative UI y separación de responsabilidades}
+% 1. Nodos mucho más separados (en X y en Y)
+\node[backend] (sql)   at (0, 0) {\textbf{Base de Datos (Backend)}\\Resultados SQL completos};
+\node[llm]     (llm)   at (7.5, 3) {\textbf{Modelo de Lenguaje}\\Diseño del componente visual};
+\node[backend] (merge) at (7.5, -3) {\textbf{Motor Visual (Backend)}\\Inyección de datos};
+\node[front]   (ui)    at (15.5, -3) {\textbf{Interfaz (Frontend)}\\Renderizado visual}; % Nodo desplazado más a la derecha
 
-El asistente puede complementar las respuestas de texto con componentes
-visuales generados a partir de los datos obtenidos en las consultas. Para ello,
-se utiliza un enfoque de \textit{Generative UI}, en el que la estructura del
-componente visual se determina en función de la información disponible.
+% 2. Flecha hacia el LLM (Arriba, giro suave)
+\draw[arrow, rounded corners=8pt] (sql.north) |- node[lbl, above=2pt, pos=0.75] {1. Metadatos y muestra (3 filas)} (llm.west);
 
-La generación de una visualización completa por parte del modelo de lenguaje,
-incluyendo tanto su estructura como los datos, presenta algunos inconvenientes.
-Por un lado, aumenta la cantidad de información que debe procesar el modelo y,
-por tanto, el tiempo necesario para generar la respuesta. Por otro, permitir
-que el modelo reproduzca directamente los valores obtenidos de la base de datos
-puede introducir errores en los datos mostrados.
+% 3. Flecha del LLM al Motor Visual (Centro, recta)
+\draw[arrow] (llm.south) -- node[lbl, right=2pt] {2. Esqueleto JSON vacío} (merge.north);
 
-Para evitar estos problemas, el motor visual, implementado en
-\texttt{graficos.py}, separa la definición de la visualización de los datos que
-se muestran:
+% 4. Flecha de la BD al Motor Visual (Abajo, giro suave)
+\draw[arrow, rounded corners=8pt] (sql.south) |- node[lbl, below=2pt, pos=0.75] {3. Inserción del 100\% de las filas} (merge.west);
 
-\begin{itemize}
+% 5. Flecha al Frontend (Derecha, recta con espacio amplio)
+\draw[arrow] (merge.east) -- node[lbl, above=2pt] {4. Envío por WebSocket} (ui.west);
 
-    \item \textbf{Decisión de viabilidad:} después de ejecutar una consulta SQL,
-    el backend analiza el resultado para determinar si puede representarse
-    mediante un componente visual. Por ejemplo, se puede considerar
-    representable un resultado con varias filas y columnas numéricas, o una
-    fila que contenga varias métricas que puedan compararse.
-
-    \item \textbf{Diseño de la visualización:} cuando el resultado es apto para
-    su representación, se realiza una llamada independiente al modelo de
-    lenguaje. En esta llamada se proporcionan los nombres de las columnas y
-    una muestra reducida de los datos. El modelo utiliza esta información junto
-    con el contexto de la consulta para determinar si resulta más apropiado
-    utilizar una tabla o un gráfico y generar la estructura correspondiente.
-    La respuesta incluye también el campo \texttt{razonamiento}, que indica el
-    motivo de la elección.
-
-    \item \textbf{Inyección de los datos:} el modelo no genera los valores que
-    se muestran finalmente al usuario. Devuelve únicamente la estructura del
-    componente visual. El backend incorpora posteriormente los datos reales
-    obtenidos de la base de datos antes de enviar el componente al frontend
-    mediante WebSocket.
-
-\end{itemize}
-
-Esta separación permite que el modelo se encargue de determinar cómo representar
-la información, mientras que los datos mostrados proceden directamente de la
-consulta realizada por el backend.
-
-\subsection{Gráficos Vega-Lite y tablas dinámicas sin plantillas}
-
-El sistema no utiliza una colección fija de plantillas para representar los
-resultados. En su lugar, el modelo de lenguaje genera la estructura del
-componente a partir del tipo de información obtenida y de la consulta realizada.
-
-\begin{itemize}
-
-    \item \textbf{Gráficos con Vega-Lite v5:} cuando los datos se pueden
-    representar de forma más adecuada mediante una visualización, el modelo
-    genera una especificación JSON compatible con Vega-Lite. En ella determina
-    el tipo de marca utilizado mediante \texttt{mark}, como líneas, barras o
-    áreas, y establece la correspondencia entre las columnas y los diferentes
-    elementos del gráfico mediante \texttt{encoding}. También puede definir
-    los títulos y etiquetas que se muestran en la interfaz.
-
-    \item \textbf{Tablas dinámicas:} cuando resulta más importante consultar
-    valores concretos o cuando los resultados contienen varios atributos, el
-    modelo puede seleccionar una representación mediante tabla. En este caso,
-    determina qué columnas deben mostrarse y en qué orden, además de asignar
-    reglas de formato mediante etiquetas como ``euros'', ``fecha'' o ``texto''.
-    El frontend utiliza esta información para representar cada columna con el
-    formato correspondiente.
-
-\end{itemize}
-
-De esta forma, la representación visual se genera a partir de los resultados
-concretos de cada consulta, sin necesidad de definir previamente una plantilla
-específica para cada tipo de pregunta.
+\end{tikzpicture}%
+}
+\caption{Arquitectura del Motor Visual Generativo (\textit{Generative UI}).} %El modelo de lenguaje actúa únicamente como diseñador de la estructura visual, mientras que el \emph{backend} asegura la integridad de la información inyectando los datos reales. Esto ahorra \textit{tokens} y elimina el riesgo de alucinaciones numéricas.}
+\label{fig:generative_ui}
+\end{figure}
