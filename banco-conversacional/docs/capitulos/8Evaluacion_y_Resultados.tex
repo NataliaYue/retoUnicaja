@@ -34,7 +34,7 @@ naturaleza distinta:
     suscripciones y el modelo decide escribir una consulta SQL manual en lugar 
     de invocar \texttt{analizar\_suscripciones}, se considera un fallo aunque 
     la cifra final resulte ser correcta. Este indicador se evalúa mediante un 
-    "espía" sobre la función \texttt{ejecutar\_tool}, permitiendo registrar 
+    espía sobre la función \texttt{ejecutar\_tool}, permitiendo registrar 
     también las peticiones que el \emph{backend} resuelve de forma directa 
     (como el saldo) y que no dejan rastro en el historial del modelo.
 
@@ -91,10 +91,6 @@ Latencia mediana hasta la voz      & 3,3 s \\
 \caption{Resultados sobre 44 preguntas y 3 repeticiones.}
 \end{table}
 
-La variabilidad entre ejecuciones del mismo sistema es de uno o dos casos sobre
-126, por lo que las comparaciones entre configuraciones se realizan siempre con
-repeticiones.
-
 \subsection{Decisiones de diseño tomadas a partir de la medición}
 
 El banco de pruebas no se utilizó únicamente para verificar el resultado final.
@@ -127,12 +123,6 @@ Evolución mensual             & 3/3 & 3/3 & 3/3 & 3/3 \\
 relativas al tratamiento de fechas.}
 \end{table}
 
-Dentro de cada versión el comportamiento es prácticamente determinista, pero
-entre versiones cambia sin relación con el contenido modificado. Cinco de las
-seis preguntas no producían gráfico en la versión final; la única que funciona
-de forma consistente es la que contiene una petición visual explícita
-(``muéstrame la evolución'').
-
 A partir de este resultado se reorganizó la responsabilidad. La decisión de
 \textit{si} existe algo que representar pasó al backend, mediante una regla
 determinista sobre la forma del resultado: varias filas con alguna columna
@@ -142,19 +132,13 @@ y con qué justificación, permanece en el modelo, en una llamada dedicada de
 tarea única.
 
 El indicador pasó del 16,7 \% al 100 \%, sin variación en la precisión de las
-respuestas ni en la latencia percibida. Conviene subrayar que la decisión que se
-trasladó al código no es una decisión de diseño visual, sino una comprobación
-mecánica sobre la estructura de los datos.
+respuestas ni en la latencia percibida.
 
 \subsubsection{El tamaño del \textit{system prompt}}
 
 Durante el desarrollo, el \textit{system prompt} fue creciendo al incorporar
 nuevas reglas. La medición mostró que ese crecimiento degradaba reglas
-anteriores: una pregunta de comparación entre categorías pasó de 3/3 a 0/3 a lo
-largo de varias sesiones, con el ejemplo que la resolvía intacto en el
-\textit{prompt}.
-
-La causa era la duplicación: las mismas seis herramientas se describían tanto en
+anteriores. La causa era la duplicación: las mismas seis herramientas se describían tanto en
 el \textit{prompt} como en sus esquemas JSON, y ambos textos se envían en cada
 petición. Se eliminó la parte duplicada (la que indica cuándo llamar a cada
 herramienta, que el esquema ya expresa y en mejor posición, junto a la
@@ -194,12 +178,6 @@ construcción: 0 falsos negativos, 1 falso positivo (0,2 \% de los históricos
 generados), ninguna cadencia mal clasificada y el seguro anual detectado en las
 500 semillas.
 
-Dos decisiones de diseño provienen de esa medición. La primera, reducir el
-umbral de irregularidad de 0,10 a 0,06. La segunda, ampliar el histórico
-generado de 15 a 24 meses, que por sí sola redujo los falsos positivos de 23 a
-0: con más histórico, los comercios no recurrentes acumulan cargos suficientes
-para que su irregularidad resulte evidente.
-
 Conviene señalar el límite de esta validación. El generador asigna a los pagos
 recurrentes un día fijo de cada mes, mientras que los gastos no recurrentes caen
 en un día aleatorio. La prueba demuestra por tanto que el detector distingue un
@@ -214,7 +192,7 @@ dos días, y deja de reconocerla a partir de tres.
 \subsubsection{Proyección de gasto}
 
 El estimador de la proyección a fin de mes se seleccionó comparando tres
-alternativas sobre los 23 meses completos del histórico, midiendo el error de
+alternativas sobre los 24 meses completos del histórico, midiendo el error de
 cada una según el día del mes en que se realiza la estimación.
 
 \begin{table}[h]
@@ -257,19 +235,11 @@ completo sin intervención del modelo: reconocimiento de la petición, validaci�
 del importe, resolución del contacto, gestión del PIN y atomicidad de la
 escritura.
 
-Esta prueba se escribió antes de refactorizar el flujo, precisamente porque el
-banco de preguntas no cubre ese camino: sus preguntas sobre Bizums son consultas
-sobre envíos pasados, que se resuelven mediante SQL. Era posible alterar el
-comportamiento del envío sin que ninguna métrica lo reflejara.
-
 Una de las comprobaciones verifica que el bloqueo de escritura se adquiere antes
 de la primera lectura. Sin esa garantía, dos envíos simultáneos leen el mismo
 saldo, ambos superan la comprobación y una actualización sobrescribe a la otra:
 en la reproducción del caso, dos envíos de 600 € sobre un saldo de 1.000 €
-resultaban ambos aprobados. La comprobación se formula sobre la propiedad que lo
-impide y no sobre el síntoma, ya que una condición de carrera solo se manifiesta
-cuando dos hilos coinciden en una ventana de milisegundos y una prueba que
-dependiera de ello resultaría inestable.
+resultaban ambos aprobados.
 
 \subsection{Limitaciones conocidas}
 
@@ -289,9 +259,7 @@ La evaluación permite delimitar con precisión lo que el sistema no resuelve:
     explícito en la respuesta de la herramienta— y ninguna resultó efectiva.
 
     \item \textbf{Preguntas sin periodo explícito y consultas sobre terceros.}
-    Se documentan como limitaciones asumidas, con la salvedad de que una de las
-    inicialmente clasificadas como tales resultó no serlo: desapareció al
-    reducir el tamaño del \textit{system prompt}.
+    Se documentan como limitaciones asumidas.
 \end{itemize}
 
 Delimitar estas limitaciones con precisión resulta más útil que un resultado

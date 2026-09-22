@@ -49,7 +49,7 @@ implementadas son las siguientes:
 
 \begin{itemize}
 
-    \item \textbf{Text-to-SQL (30 puntos):} se ha implementado la traducción de
+    \item \textbf{Text-to-SQL:} se ha implementado la traducción de
     consultas en lenguaje natural a sentencias SQL mediante la herramienta
     \texttt{consultar\_movimientos}. El esquema de la base de datos se incorpora
     al \textit{System Prompt} y el sistema permite corregir determinadas
@@ -57,27 +57,27 @@ implementadas son las siguientes:
     sobre el histórico se realizan mediante una conexión SQLite de solo lectura
     (\texttt{mode=ro}) y se aplican validaciones adicionales antes de ejecutarlas.
 
-    \item \textbf{Operaciones Bancarias (10 puntos):} el asistente permite
+    \item \textbf{Operaciones Bancarias:} el asistente permite
     realizar operaciones como la consulta del saldo y el envío de dinero
     mediante Bizum. El flujo de Bizum incluye la extracción y validación del
     importe, la resolución del destinatario, la introducción del PIN desde el
     frontend y la ejecución de la operación mediante una transacción SQLite
     iniciada con \texttt{BEGIN IMMEDIATE}.
 
-    \item \textbf{Gráficos sin plantillas (10 puntos):} las visualizaciones se
+    \item \textbf{Gráficos sin plantillas:} las visualizaciones se
     generan a partir de los resultados concretos de cada consulta, sin utilizar
     una plantilla fija para cada caso. El modelo genera especificaciones
     compatibles con Vega-Lite v5 y determina elementos como el tipo de gráfico,
     los ejes y los títulos.
 
-    \item \textbf{Lógica visual (10 puntos):} el backend analiza inicialmente
+    \item \textbf{Lógica visual:} el backend analiza inicialmente
     si los resultados obtenidos son adecuados para una representación visual.
     Cuando lo son, el modelo determina si la información debe mostrarse como
     tabla o como gráfico y genera la estructura correspondiente. La decisión
     incluye el campo \texttt{razonamiento}, utilizado para indicar el motivo de
     la elección.
 
-    \item \textbf{Analítica avanzada (extra):} se han implementado
+    \item \textbf{Analítica avanzada:} se han implementado
     funcionalidades adicionales para analizar los movimientos del usuario,
     como la detección de pagos recurrentes y la proyección del gasto mensual.
     Estos cálculos se realizan en Python mediante reglas y métodos estadísticos,
