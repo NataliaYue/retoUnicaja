@@ -15,9 +15,7 @@ Para que el modelo no se equivoque interpretando los datos, le pasamos unas regl
     Para sumar lo gastado y que la cifra no confunda al usuario, le explicamos al modelo que tiene que usar 
     \texttt{SUM(-importe)} y mostrar siempre el resultado en positivo.
     
-    \item \textbf{Gestión temporal:} Le indicamos cómo usar funciones nativas como \texttt{strftime} para que no 
-    mezcle conceptos. Por ejemplo, le dejamos claro que calcular "este año" natural no se hace igual que buscar 
-    "los últimos doce meses".
+    \item \textbf{Gestión temporal:} Le indicamos cómo usar funciones nativas como \texttt{strftime} (pues daba problemas a veces).
     
     \item \textbf{Autocorrección:} Si el modelo genera un SQL inválido que produce un error en SQLite, el sistema 
     no se rompe. La capa de base de datos intercepta el error y se lo devuelve al agente en el siguiente turno. 
@@ -36,7 +34,7 @@ Hay preguntas que un modelo de lenguaje pequeño no sabe deducir solo escribiend
 o predecir cuánto dinero nos va a sobrar a final de mes exige hacer cálculos sobre todo el historial y buscar patrones 
 estadísticos.   
 
-Por eso, apostamos por un enfoque híbrido: la "inteligencia" matemática está programada de forma determinista en Python 
+Por eso, apostamos por un enfoque híbrido: el análisis estadístico está programada de forma determinista en Python 
 dentro del módulo \texttt{analitica.py}, y el modelo de lenguaje solo entra en juego al final, para entender qué ha pedido 
 el usuario y redactarle el resultado.
 
@@ -46,12 +44,12 @@ En la base de datos no hay ninguna columna que nos diga si un pago es una suscri
 o un recibo fijo; es algo que hay que inferir analizando el histórico.
 
 Para detectarlos, nuestro algoritmo no se fija en que el importe sea siempre idéntico 
-(porque recibos como la luz o el agua varían cada mes), sino en la regularidad de los 
+porque recibos como la luz o el agua varían cada mes, sino en la regularidad de los 
 días que pasan entre un cobro y otro.
 
 El procedimiento es el siguiente: calculamos la mediana de los intervalos entre los pagos 
 de un mismo comercio y medimos cuánto se desvían de ella. Si ese factor de irregularidad es menor o igual 
-a 0,06, y la mediana encaja en una cadencia conocida (mensual, trimestral, anual, etc.) con un margen de 
+a 0,06 (valor elegido empíricamente), y la mediana encaja en una cadencia conocida (mensual, trimestral, anual, etc.) con un margen de 
 tolerancia del 20\%, confirmamos que es un pago recurrente.
 
 Esto nos permite identificar desde la cuota de Netflix hasta el seguro del coche que llega una vez al año. 

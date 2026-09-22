@@ -13,14 +13,13 @@ Para optimizar esto, en el archivo \texttt{agent.py} incluimos la función
 el \emph{backend} llama directamente a la API \texttt{consultar\_saldo} y 
 responde al momento, saltándose por completo al modelo.
 
-El filtro funciona detectando palabras clave (como "saldo" o "dinero disponible") 
+El filtro funciona detectando palabras clave (como saldo o dinero disponible) 
 y comprobando que el resto de la frase solo contenga términos de relleno autorizados 
 en la lista \texttt{\_RELLENO\_SALDO}. Hemos sido muy restrictivos a propósito con estas 
 palabras permitidas, para evitar que consultas que requieran información adicional 
 sean identificadas incorrectamente como una consulta de saldo.
 
 En este caso, los errores tienen distinto coste:
-
 \begin{itemize}
     \item \textbf{Falso negativo:} si una consulta de saldo simple no pasa el filtro, 
     la petición llegará al LLM, que usará la herramienta correspondiente y responderá 
@@ -44,7 +43,6 @@ solo ayudan a entender la intención, pero la ejecución está controlada de pri
 el \emph{backend}. El proceso, ilustrado en la Figura~\ref{fig:bizum}, sigue estas etapas:
 
 \input{figuras/fig_bizum}
-
 \begin{enumerate}
 
     \item \textbf{Extracción y validación inicial:} la función
