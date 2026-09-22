@@ -11,14 +11,14 @@ Uno de los principales aspectos de la arquitectura es la separación de
 responsabilidades entre el modelo de lenguaje y el código de la aplicación. El
 LLM se utiliza principalmente para interpretar las peticiones, generar
 consultas SQL, seleccionar herramientas y definir la estructura de las
-visualizaciones. Por otro lado, el backend se encarga de realizar los cálculos,
+visualizaciones. Por otro lado, el \emph{backend} se encarga de realizar los cálculos,
 consultar los datos y ejecutar las operaciones que modifican el estado de la
 aplicación.
 
 Esta separación también se aplica a las operaciones que requieren un mayor
 control, como el envío de Bizums. La validación de los datos, la autenticación
 mediante PIN y la actualización del saldo se realizan fuera del modelo de
-lenguaje y mediante la lógica del backend y las transacciones de la base de
+lenguaje y mediante la lógica del \emph{backend} y las transacciones de la base de
 datos.
 
 Durante el desarrollo también se han realizado diferentes ajustes para reducir
@@ -26,9 +26,8 @@ el tiempo de respuesta. Un ejemplo es la resolución directa de determinadas
 consultas, como la del saldo, que se resuelven sin recurrir al modelo.
 
 Otro es la posición del motor visual dentro del turno. La generación de la
-tabla o el gráfico no se ejecuta en paralelo con la respuesta —la memoria
-disponible en la tarjeta gráfica no permite atender dos peticiones simultáneas
-al modelo—, sino después del evento \texttt{fin\_respuesta}, cuando el texto
+tabla o el gráfico no se ejecuta en paralelo con la respuesta, sino después del 
+evento \texttt{fin\_respuesta}, cuando el texto
 ya se ha emitido y la síntesis de voz, que arranca con la primera frase, está en
 marcha. De este modo la generación queda fuera del camino crítico: el usuario escucha la respuesta de inmediato y el elemento visual
 aparece mientras la está oyendo, acompañado de un indicador de que se está

@@ -15,7 +15,7 @@ Para que el modelo no se equivoque interpretando los datos, le pasamos unas regl
     Para sumar lo gastado y que la cifra no confunda al usuario, le explicamos al modelo que tiene que usar 
     \texttt{SUM(-importe)} y mostrar siempre el resultado en positivo.
     
-    \item \textbf{Gestión temporal:} Le indicamos cómo usar funciones nativas como \texttt{strftime} (pues daba problemas a veces).
+    \item \textbf{Gestión temporal:} Le indicamos cómo usar funciones nativas como \texttt{strftime} (ya que el manejo de fechas en SQLite puede generar errores si no se unifican los formatos).
     
     \item \textbf{Autocorrección:} Si el modelo genera un SQL inválido que produce un error en SQLite, el sistema 
     no se rompe. La capa de base de datos intercepta el error y se lo devuelve al agente en el siguiente turno. 

@@ -2,10 +2,9 @@
 
 \subsection{Por qué se construyó un banco de pruebas}
 
-Un asistente conversacional puede dar una respuesta equivocada con total
-naturalidad. A diferencia de un error de programación, que se manifiesta con
-una excepción, una cifra incorrecta expresada en una frase bien construida
-resulta indistinguible de una correcta para quien la escucha.
+A diferencia de un error de programación, que se manifiesta con
+una excepción, los errores producidos por el modelo de lenguaje son silenciosos: 
+el sistema puede generar una respuesta errónea sin que se detecte de inmediato.
 
 Durante el desarrollo se detectó un caso que ilustra el problema. Ante la
 pregunta ``¿he gastado más este año que el año pasado?'', el modelo generaba una
@@ -31,11 +30,13 @@ Se puntúan cuatro indicadores por separado, porque responden a fallos de
 naturaleza distinta:
 
 \begin{itemize}
-    \item \textbf{Elección de herramienta.} Preguntar por las suscripciones y
-    que el modelo escriba una consulta SQL es un fallo aunque la cifra final sea
-    correcta. Se registra mediante un espía sobre \texttt{ejecutar\_tool}, de
-    forma que también se observan las resoluciones directas del backend, que no
-    aparecen en el historial del modelo.
+    \item \textbf{Elección de herramienta.} Si el usuario pregunta por sus 
+    suscripciones y el modelo decide escribir una consulta SQL manual en lugar 
+    de invocar \texttt{analizar\_suscripciones}, se considera un fallo aunque 
+    la cifra final resulte ser correcta. Este indicador se evalúa mediante un 
+    "espía" sobre la función \texttt{ejecutar\_tool}, permitiendo registrar 
+    también las peticiones que el \emph{backend} resuelve de forma directa 
+    (como el saldo) y que no dejan rastro en el historial del modelo.
 
     \item \textbf{Respuesta final.} Que la consulta sea correcta no garantiza
     que el modelo traslade bien la cifra al texto. Es lo único que oye el
@@ -56,25 +57,23 @@ naturaleza distinta:
     redactando.
 \end{itemize}
 
-Se mide además un quinto indicador sin puntuación, como diagnóstico: se ejecutan
-la consulta generada por el agente y una de referencia escrita a mano, y se
-comparan los valores obtenidos. No cuenta para el resultado porque el modelo
-puede elegir una interpretación distinta y defendible —otro periodo, otra forma
-de calcular una media— y divergir de la referencia sin estar equivocado. Nunca
-se compara el texto de la consulta: existen muchas consultas correctas
-distintas para la misma pregunta.
+Adicionalmente, medimos un quinto indicador: ejecutamos la consulta SQL generada por el agente en paralelo a 
+una consulta SQL escrita a mano (la referencia), y comparamos los resultados. 
+No se puntúa porque el modelo puede interpretar la pregunta de forma diferente 
+pero válida. Además, nunca comparamos el texto en crudo de la consulta SQL, 
+ya que existen multitud de sentencias válidas para obtener un mismo resultado.
 
-La latencia se mide en dos tramos. El relevante es el tiempo hasta el evento
-\texttt{fin\_respuesta}, en el que el texto de la respuesta ya está completo. Es
-una cota superior de la espera que percibe el usuario, porque la síntesis de voz
-empieza antes, con la primera frase recibida. El motor visual se ejecuta después
-de ese evento de forma deliberada, así que contabilizar únicamente el tiempo total
-penalizaría un trabajo que ya no bloquea la respuesta.
+Por último, evaluamos la latencia en dos tramos. El tramo más relevante mide 
+el tiempo transcurrido hasta emitir el evento \texttt{fin\_respuesta}, que marca 
+el momento en el que el texto de la respuesta está completo. Esta métrica 
+representa una cota superior de la espera percibida por el usuario, ya que la 
+síntesis de voz arranca antes (con la primera frase).
 
 \subsection{Resultados}
 
-Las mediciones se realizan con tres repeticiones de las 44 preguntas, sobre
-\texttt{qwen3:8b} y con la base de datos regenerada previamente.
+Las métricas se obtuvieron realizando tres repeticiones independientes de las 44 
+preguntas, utilizando el modelo local \texttt{qwen3:8b} y regenerando la base de 
+datos sintética antes de cada evaluación.
 
 \begin{table}[h]
 \centering
@@ -94,8 +93,7 @@ Latencia mediana hasta la voz      & 3,3 s \\
 
 La variabilidad entre ejecuciones del mismo sistema es de uno o dos casos sobre
 126, por lo que las comparaciones entre configuraciones se realizan siempre con
-repeticiones. Una diferencia de dos casos en una única ejecución no constituye
-una señal.
+repeticiones.
 
 \subsection{Decisiones de diseño tomadas a partir de la medición}
 
@@ -139,7 +137,7 @@ A partir de este resultado se reorganizó la responsabilidad. La decisión de
 \textit{si} existe algo que representar pasó al backend, mediante una regla
 determinista sobre la forma del resultado: varias filas con alguna columna
 numérica, o una sola fila con dos o más cifras comparables. La decisión de
-\textit{qué} representación utilizar —tabla o gráfico—, con qué marca, qué ejes
+\textit{qué} representación utilizar (tabla o gráfico), con qué marca, qué ejes
 y con qué justificación, permanece en el modelo, en una llamada dedicada de
 tarea única.
 
@@ -158,9 +156,9 @@ largo de varias sesiones, con el ejemplo que la resolvía intacto en el
 
 La causa era la duplicación: las mismas seis herramientas se describían tanto en
 el \textit{prompt} como en sus esquemas JSON, y ambos textos se envían en cada
-petición. Se eliminó la parte duplicada —la que indica cuándo llamar a cada
+petición. Se eliminó la parte duplicada (la que indica cuándo llamar a cada
 herramienta, que el esquema ya expresa y en mejor posición, junto a la
-definición de la función— y se conservó la que el esquema no puede expresar:
+definición de la función) y se conservó la que el esquema no puede expresar:
 cómo interpretar el resultado devuelto.
 
 \begin{table}[h]

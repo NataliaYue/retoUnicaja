@@ -3,36 +3,33 @@
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
     font=\small,
-    agent/.style={draw=subsectionblue, fill=subsectionblue!10, rounded corners=3pt, align=center, minimum width=3cm, minimum height=2.2cm, thick},
-    llm/.style={draw=ugrred, fill=ugrred!10, rounded corners=3pt, align=center, minimum width=3cm, minimum height=2.2cm, thick},
-    tool/.style={draw=green!60!black, fill=green!10, rounded corners=3pt, align=center, minimum width=3cm, minimum height=1.4cm, thick},
-    user/.style={draw=orange!80, fill=orange!10, circle, align=center, minimum width=1.6cm, thick},
-    arrow/.style={-{Stealth[length=2mm]}, thick, draw=gray!80!black},
-    lbl/.style={fill=white, font=\scriptsize, inner sep=3pt, text=gray!80!black}
+    backend/.style={draw=subsectionblue, fill=subsectionblue!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
+    llm/.style={draw=ugrred, fill=ugrred!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
+    front/.style={draw=orange!90, fill=orange!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
+    arrow/.style={-{Stealth[length=2.5mm]}, thick, draw=gray!80!black},
+    lbl/.style={font=\scriptsize, inner sep=4pt, text=gray!80!black}
 ]
 
-% 1. Nodos más separados
-\node[user]  (user)   at (0, 0) {Usuario};
-\node[agent] (agent)  at (5.5, 0) {\textbf{Agente}\\(\texttt{agent.py})};
-\node[llm]   (ollama) at (12.5, 0) {\textbf{Ollama}\\(Modelo local)};
-\node[tool]  (tools)  at (5.5, -4.2) {\textbf{Herramientas}\\(\texttt{tools.py})};
+% 1. Nodos mucho más separados (en X y en Y)
+\node[backend] (sql)   at (0, 0) {\textbf{Base de Datos (Backend)}\\Resultados SQL completos};
+\node[llm]     (llm)   at (7.5, 3) {\textbf{Modelo de Lenguaje}\\Diseño del componente visual};
+\node[backend] (merge) at (7.5, -3) {\textbf{Motor Visual (Backend)}\\Inyección de datos};
+\node[front]   (ui)    at (15.5, -3) {\textbf{Interfaz (Frontend)}\\Renderizado visual}; % Nodo desplazado más a la derecha
 
-% 2. Flechas Usuario <-> Agente (con más separación vertical)
-\draw[arrow] ([yshift=4mm]user.east) -- node[lbl, above] {1. Pregunta} ([yshift=4mm]agent.west);
-\draw[arrow] ([yshift=-4mm]agent.west) -- node[lbl, below] {8. Respuesta final} ([yshift=-4mm]user.east);
+% 2. Flecha hacia el LLM (Arriba, giro suave)
+\draw[arrow, rounded corners=8pt] (sql.north) |- node[lbl, above=2pt, pos=0.75] {1. Metadatos y muestra (3 filas)} (llm.west);
 
-% 3. Flechas Agente <-> Ollama (muy espaciadas ahora que los nodos son más altos)
-\draw[arrow] ([yshift=8mm]agent.east) -- node[lbl, fill=white] {2. Prompt + Herramientas} ([yshift=8mm]ollama.west);
-\draw[arrow] ([yshift=2.5mm]ollama.west) -- node[lbl, fill=white] {3. Pide \textit{Tool} (JSON)} ([yshift=2.5mm]agent.east);
-\draw[arrow] ([yshift=-2.5mm]agent.east) -- node[lbl, fill=white] {6. Envía resultado (\texttt{tool})} ([yshift=-2.5mm]ollama.west);
-\draw[arrow] ([yshift=-8mm]ollama.west) -- node[lbl, fill=white] {7. Genera texto} ([yshift=-8mm]agent.east);
+% 3. Flecha del LLM al Motor Visual (Centro, recta)
+\draw[arrow] (llm.south) -- node[lbl, right=2pt] {2. Esqueleto JSON vacío} (merge.north);
 
-% 4. Flechas Agente <-> Herramientas (separadas lateralmente)
-\draw[arrow] ([xshift=-6mm]agent.south) -- node[lbl, left] {4. Ejecuta función} ([xshift=-6mm]tools.north);
-\draw[arrow] ([xshift=6mm]tools.north) -- node[lbl, right] {5. Devuelve JSON} ([xshift=6mm]agent.south);
+% 4. Flecha de la BD al Motor Visual (Abajo, giro suave)
+\draw[arrow, rounded corners=8pt] (sql.south) |- node[lbl, below=2pt, pos=0.75] {3. Inserción del 100\% de las filas} (merge.west);
+
+% 5. Flecha al Frontend (Derecha, recta con espacio amplio)
+\draw[arrow] (merge.east) -- node[lbl, above=2pt] {4. Envío por WebSocket} (ui.west);
 
 \end{tikzpicture}%
 }
-\caption{Flujo de interacción del Agente mediante \textit{Tool Calling}. El Agente (\texttt{agent.py}) actúa como intermediario: controla el tamaño del historial, adapta los formatos de las herramientas y ejecuta el código en el \emph{backend}, aislando a Ollama del acceso directo al sistema.}
-\label{fig:flujo_agente}
+\caption{Arquitectura del Motor Visual Generativo (\textit{Generative UI}).} %El modelo de lenguaje actúa únicamente como diseñador de la estructura visual, mientras que el \emph{backend} asegura la integridad de la información inyectando los datos reales. Esto ahorra \textit{tokens} y elimina el riesgo de alucinaciones numéricas.}
+\label{fig:generative_ui}
 \end{figure}
