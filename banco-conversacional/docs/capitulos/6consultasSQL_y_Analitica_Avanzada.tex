@@ -19,10 +19,13 @@ Para que el modelo no se equivoque interpretando los datos, le pasamos unas regl
     
     \item \textbf{Autocorrección:} Si el modelo genera un SQL inválido que produce un error en SQLite, el sistema 
     no se rompe. La capa de base de datos intercepta el error y se lo devuelve al agente en el siguiente turno. 
-    De esta forma, el modelo se da cuenta de su propio fallo, corrige la sentencia y lo vuelve a intentar automáticamente 
-    (hasta un máximo de dos veces para no quedarse en bucle).
-    \input{figuras/text_to_sql.tex}
+    De esta forma, el modelo se da cuenta de su propio fallo, corrige la sentencia y lo vuelve a intentar automáticamente.
+    El bucle no puede prolongarse indefinidamente: el agente tiene un tope de
+    \texttt{MAX\_ITERACIONES\_AGENTE = 8} vueltas por turno, que cuenta todas las
+    llamadas a herramientas, incluidas las correcciones.
 \end{itemize}
+
+\input{figuras/text_to_sql.tex}
 
 \newpage
 Con este diseño, el modelo actúa como un traductor ágil entre el usuario y los datos, mientras que la ejecución 
@@ -52,7 +55,14 @@ de un mismo comercio y medimos cuánto se desvían de ella. Si ese factor de irr
 a 0,06 (valor elegido empíricamente), y la mediana encaja en una cadencia conocida (mensual, trimestral, anual, etc.) con un margen de 
 tolerancia del 20\%, confirmamos que es un pago recurrente.
 
-Esto nos permite identificar desde la cuota de Netflix hasta el seguro del coche que llega una vez al año. 
+La Figura~\ref{fig:recurrencia} compara los dos casos sobre los datos reales del
+histórico: Netflix se cobra cada 30 o 31 días, mientras que en una gasolinera se
+reposta cuando toca. El hueco entre ambos grupos es amplio, y el umbral cae
+dentro de él.
+
+\input{figuras/fig_recurrencia}
+
+Esto nos permite identificar desde la cuota de Netflix hasta el seguro del coche que llega una vez al año.
 Además, al revisar todo el histórico, este mismo algoritmo detecta automáticamente si alguna de estas 
 suscripciones ha subido de precio recientemente.
 

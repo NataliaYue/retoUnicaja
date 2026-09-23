@@ -132,7 +132,11 @@ y con qué justificación, permanece en el modelo, en una llamada dedicada de
 tarea única.
 
 El indicador pasó del 16,7 \% al 100 \%, sin variación en la precisión de las
-respuestas ni en la latencia percibida.
+respuestas ni en la latencia percibida. La Figura~\ref{fig:resultados} recoge
+ese cambio junto al de la latencia, que es la otra decisión que se tomó a partir
+de una medición.
+
+\input{figuras/fig_resultados}
 
 \subsubsection{El tamaño del \textit{system prompt}}
 
@@ -260,6 +264,91 @@ La evaluación permite delimitar con precisión lo que el sistema no resuelve:
 
     \item \textbf{Preguntas sin periodo explícito y consultas sobre terceros.}
     Se documentan como limitaciones asumidas.
+\end{itemize}
+
+Al margen de lo que mide el banco de pruebas, el sistema tiene otros límites
+que conviene dejar por escrito, porque marcan la distancia entre esta
+demostración y un producto.
+
+\subsubsection{Alcance funcional}
+
+\begin{itemize}
+    \item \textbf{Un único titular y una única cuenta.} La tabla
+    \texttt{cliente} contiene una sola fila y las consultas de saldo se hacen
+    contra \texttt{WHERE id = 1}. La tabla \texttt{movimientos} no tiene columna
+    de cuenta, así que no hay forma de distinguir entre varias.
+
+    \item \textbf{Catálogo de operaciones reducido.} Se pueden consultar el
+    saldo y los movimientos y enviar un Bizum. No hay transferencias, tarjetas,
+    domiciliaciones ni cancelación de una operación ya realizada.
+
+    \item \textbf{Histórico relativo a la fecha de generación.} Los movimientos
+    se crean a partir del día en que se ejecuta \texttt{seed.py}. Si cambia el
+    mes y no se regenera la base de datos, las preguntas sobre ``este mes''
+    devuelven resultados vacíos.
+
+    \item \textbf{Solo español.} El \textit{system prompt}, el reconocimiento de
+    voz (\texttt{es-ES}) y los formatos de cifra y fecha asumen ese idioma.
+\end{itemize}
+
+\subsubsection{Límites técnicos y de operación}
+
+\begin{itemize}
+    \item \textbf{Memoria de la conversación acotada.} La ventana es de 8192
+    \textit{tokens} y se conservan 24 mensajes. Una conversación larga pierde el
+    principio, y el historial vive en memoria del proceso: al cerrarse la
+    conexión por inactividad, o al reiniciar el servidor, desaparece.
+
+    \item \textbf{Atención en serie.} Hay un solo proceso y una sola instancia
+    del modelo en la tarjeta gráfica, que no admite dos peticiones a la vez. Con
+    varios usuarios simultáneos las peticiones se encolan y la latencia crece de
+    forma proporcional.
+
+    \item \textbf{SQLite admite un único escritor.} La transacción
+    \texttt{BEGIN IMMEDIATE} garantiza la integridad de los envíos, pero lo hace
+    serializándolos.
+
+    \item \textbf{Las latencias dependen del equipo.} Las cifras de esta memoria
+    se midieron sobre un portátil concreto y conectado a la corriente; en otro
+    equipo, o con la batería limitando la tarjeta gráfica, cambian de forma
+    apreciable.
+
+    \item \textbf{La interfaz necesita conexión.} El modelo y los datos son
+    locales, pero el navegador descarga de la red la biblioteca de gráficos
+    (Vega-Lite), las tipografías y los iconos de los comercios. Sin internet el
+    asistente responde y habla igual, pero los gráficos no llegan a dibujarse.
+\end{itemize}
+
+\subsubsection{Límites de la demostración en materia de seguridad}
+
+\begin{itemize}
+    \item \textbf{El acceso no es autenticación real.} La pantalla de inicio se
+    valida en el navegador y el punto de entrada \texttt{/ws} no comprueba
+    ninguna credencial: quien conozca la dirección puede abrir una conversación.
+
+    \item \textbf{El PIN está fijado en el código} (\texttt{config.py}), sin
+    cifrado ni almacenamiento seguro. Su papel aquí es demostrar que la clave
+    nunca llega al modelo, no proteger un activo real.
+
+    \item \textbf{No hay registro de auditoría.} Las operaciones modifican el
+    saldo pero no dejan traza de quién las pidió ni desde dónde.
+\end{itemize}
+
+\subsubsection{Límites de la propia evaluación}
+
+\begin{itemize}
+    \item \textbf{El resultado varía entre repeticiones} en uno o dos casos
+    aunque no cambie nada del sistema. Por eso las cifras se obtienen siempre
+    sobre tres repeticiones, y una diferencia de un caso no se interpreta como
+    mejora ni como regresión.
+
+    \item \textbf{El banco tiene 44 preguntas.} Cubre los tipos de consulta del
+    enunciado y los añadidos durante el desarrollo, pero no es exhaustivo: hay
+    formas de preguntar que no están representadas.
+
+    \item \textbf{No se prueba la interfaz de forma automática.} Las pruebas
+    llegan hasta los eventos que emite el servidor; lo que ocurre después en el
+    navegador se ha comprobado a mano.
 \end{itemize}
 
 Delimitar estas limitaciones con precisión resulta más útil que un resultado

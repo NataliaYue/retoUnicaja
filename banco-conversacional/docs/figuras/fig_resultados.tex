@@ -1,0 +1,50 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    barra/.style={draw=#1, fill=#1!25, thick},
+    barra/.default=gray,
+    val/.style={font=\footnotesize\bfseries, text=#1, anchor=south, inner sep=2pt},
+    val/.default=gray!60!black,
+    pie/.style={font=\scriptsize, text=gray!55!black, align=center, anchor=north,
+                inner sep=3pt, text width=2.4cm},
+    titulo/.style={font=\footnotesize\bfseries, text=subsectionblue, anchor=south,
+                   align=center, text width=6.4cm},
+]
+
+% ================= Panel 1: refuerzo visual (mayor es mejor) =============
+% escala: 3 cm = 100 %
+\node[titulo] at (2.3,3.6) {Preguntas que reciben el elemento visual que les corresponde};
+
+\draw[barra=ugrred]         (0.5,0) rectangle (1.6,0.50);
+\node[val=ugrred]        at (1.05,0.50) {16,7 \%};
+\node[pie]               at (1.05,-0.1) {lo decide el modelo};
+
+\draw[barra=subsectionblue] (3.0,0) rectangle (4.1,3.00);
+\node[val=subsectionblue] at (3.55,3.00) {100 \%};
+\node[pie]                at (3.55,-0.1) {regla determinista en el backend};
+
+\draw[gray!55] (0.2,0) -- (4.4,0);
+
+% ============ Panel 2: latencia hasta la voz (menor es mejor) ============
+% escala: 3 cm = 12,4 s; solo preguntas que generan un elemento visual
+\node[titulo] at (10.0,3.6) {Tiempo hasta la respuesta hablada en preguntas con elemento visual};
+
+\draw[barra=ugrred]         (8.2,0) rectangle (9.3,3.00);
+\node[val=ugrred]        at (8.75,3.00) {12,4 s};
+\node[pie]               at (8.75,-0.1) {la herramienta visual se llama dentro del bucle};
+
+\draw[barra=subsectionblue] (10.7,0) rectangle (11.8,1.62);
+\node[val=subsectionblue] at (11.25,1.62) {6,7 s};
+\node[pie]                at (11.25,-0.1) {llamada dedicada tras \texttt{fin\_respuesta}};
+
+\draw[gray!55] (7.9,0) -- (12.1,0);
+
+\end{tikzpicture}
+\caption{Las dos decisiones que más cambiaron al medirlas. A la izquierda,
+mover al \emph{backend} la decisión de \textit{si} mostrar algo; a la derecha,
+sacar la generación del elemento visual fuera del camino crítico. La segunda
+medición corresponde solo a las preguntas que acaban generando una tabla o un
+gráfico, no a la mediana de las 44.}
+\label{fig:resultados}
+\end{figure}

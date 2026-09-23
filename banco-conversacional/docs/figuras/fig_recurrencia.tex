@@ -1,0 +1,72 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    eje/.style={draw=gray!55, thick},
+    cargo/.style={circle, fill=#1, draw=none, inner sep=0pt, minimum size=4.5pt},
+    cargo/.default=subsectionblue,
+    dia/.style={font=\tiny, text=gray!60!black, inner sep=1pt},
+    nom/.style={font=\footnotesize, anchor=east, align=right},
+    et/.style={font=\scriptsize, text=gray!55!black, align=center, inner sep=2pt},
+]
+
+% ===================== Panel 1: dos líneas temporales =====================
+% x = días desde el 1 de febrero de 2026, a 0,055 cm por día
+
+% --- Netflix: cargo mensual
+\node[nom] at (-0.35,0) {Netflix\\[-2pt]\tiny mediana 31 días};
+\draw[eje] (0,0) -- (12.2,0);
+\foreach \d in {1.76, 3.47, 5.12, 6.82, 8.47, 10.18, 11.88}
+    \node[cargo] at (\d,0) {};
+\foreach \x/\dd in {2.61/31, 4.29/30, 5.97/31, 7.64/30, 9.32/31, 11.03/31}
+    \node[dia, above=1.5pt] at (\x,0) {\dd};
+
+% --- Repsol: repostajes
+\node[nom] at (-0.35,-1.7) {Repsol\\[-2pt]\tiny mediana 25,5 días};
+\draw[eje] (0,-1.7) -- (12.2,-1.7);
+\foreach \d in {0.33, 2.26, 5.28, 7.81, 8.64, 9.52, 9.57}
+    \node[cargo=ugrred] at (\d,-1.7) {};
+\foreach \x/\dd in {1.29/35, 3.77/55, 6.54/46, 8.22/15, 9.08/16}
+    \node[dia, above=1.5pt] at (\x,-1.7) {\dd};
+\node[dia, above=1.5pt] at (10.4,-1.7) {1};
+\draw[gray!55] (9.62,-1.62) -- (10.15,-1.72);
+
+\node[et, anchor=west] at (0,-2.5)
+      {Días entre cargos consecutivos, sobre los siete últimos de cada comercio};
+
+% ===================== Panel 2: escala de irregularidad ===================
+% x = (log10(v) + 2,2) * 4     (escala logarítmica)
+\begin{scope}[yshift=-4.6cm]
+
+\fill[subsectionblue!12, rounded corners=2pt] (0.2,-0.22) rectangle (3.92,0.22);
+\fill[ugrred!10, rounded corners=2pt]         (3.92,-0.22) rectangle (11.4,0.22);
+\draw[eje] (0.2,0) -- (11.4,0);
+
+\draw[ugrred, thick, dashed] (3.92,-0.55) -- (3.92,0.75);
+\node[et, text=ugrred, anchor=south] at (3.92,0.78) {umbral 0,06};
+
+\foreach \x/\val/\txt/\yy in {%
+    0.80/{0,01}/{Emasagra (bimestral)}/{-0.78},
+    1.52/{0,015}/{Netflix}/{-1.28},
+    5.12/{0,12}/{el más regular de\\los no recurrentes}/{-0.78},
+    8.28/{0,741}/{Repsol}/{-0.78}}
+{
+    \draw[gray!55] (\x,-0.22) -- (\x,-0.4);
+    \node[dia, anchor=north] at (\x,-0.42) {\val};
+    \node[et, anchor=north] at (\x,\yy) {\txt};
+}
+
+\node[et, anchor=west, text=subsectionblue] at (0.2,0.55) {se acepta como recurrente};
+\node[et, anchor=east, text=ugrred]         at (11.4,0.55) {se descarta};
+\node[et, anchor=north west] at (0.2,-1.75)
+      {Factor de irregularidad: desviación típica de los intervalos dividida entre su mediana. Escala logarítmica.};
+
+\end{scope}
+\end{tikzpicture}
+\caption{Cómo se distingue un pago recurrente. Lo que separa una suscripción de
+un comercio que se visita a menudo no es el importe, sino la regularidad de los
+intervalos entre cargos. Los valores medidos sobre el histórico generado dejan
+un margen amplio entre ambos grupos, y el umbral de 0,06 cae dentro de ese
+hueco.}
+\label{fig:recurrencia}
+\end{figure}

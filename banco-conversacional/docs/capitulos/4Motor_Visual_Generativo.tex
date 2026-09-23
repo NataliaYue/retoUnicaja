@@ -61,7 +61,8 @@ Para solucionarlo, en \texttt{agent.py} está la función
 automáticamente nuestras herramientas al formato correcto antes de enviárselas al 
 modelo, permitiendo que la conexión funcione sin problemas.
 
-El proceso completo de interacción funciona como se ilustra en la Figure \ref{fig:flujo_agente}: 
+El proceso completo de interacción funciona como se ilustra en la
+Figura~\ref{fig:flujo_agente}:
 el usuario hace una pregunta, y el modelo evalúa si necesita usar alguna herramienta para responder. Si es así, interrumpe su respuesta y devuelve un mensaje especial pidiendo ejecutarla. Nuestro \emph{backend} recibe esa petición, ejecuta el código en Python (por ejemplo, hace la consulta a la base de datos) y le devuelve el resultado al modelo añadiendo un mensaje con el rol \texttt{tool}. Finalmente, el modelo lee ese resultado y ya dispone de los datos concretos para redactar la respuesta que escuchará el usuario.
 
 \input{figuras/fig_tool_calling}

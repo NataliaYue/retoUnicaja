@@ -1,43 +1,40 @@
-\begin{figure}[!ht]
+\begin{figure}[htbp]
 \centering
-\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
     font=\small,
-    llm/.style={draw=ugrred, fill=ugrred!10, rounded corners=4pt, align=center, minimum width=3.8cm, minimum height=1.6cm, thick},
-    backend/.style={draw=subsectionblue, fill=subsectionblue!10, rounded corners=4pt, align=center, minimum width=3.8cm, minimum height=1.6cm, thick},
-    db/.style={draw=gray!70!black, fill=gray!10, rounded corners=4pt, align=center, minimum width=3.8cm, minimum height=1.6cm, thick},
-    arrow/.style={-{Stealth[length=2.5mm]}, thick, draw=gray!80!black},
-    lbl/.style={font=\scriptsize, inner sep=4pt, text=gray!80!black} % Sin fondo blanco para no cortar líneas
+    caja/.style={draw=#1, fill=#1!8, rounded corners=3pt, align=center,
+                 minimum width=3.6cm, minimum height=1.2cm, inner sep=3pt},
+    caja/.default=subsectionblue,
+    flecha/.style={-{Stealth[length=2mm]}, thick, draw=gray!70!black},
+    et/.style={font=\scriptsize, text=gray!55!black, align=center, inner sep=2pt},
 ]
 
-% 1. Nodos principales
-\node[llm]     (llm)    at (0, 0) {\textbf{Modelo de Lenguaje}\\(Traduce a SQL)};
-\node[backend] (api)    at (7.5, 0) {\textbf{Capa de Control}\\(\texttt{ejecutar\_sql\_seguro})};
-\node[db]      (sqlite) at (15, 0) {\textbf{Base de Datos}\\(SQLite \texttt{mode=ro})};
+\node[caja=ugrred] (llm)    at (0,0)    {Modelo\\[-1pt]\scriptsize traduce a SQL};
+\node[caja]        (api)    at (6.2,0)  {\texttt{ejecutar\_sql\_seguro}\\[-1pt]\scriptsize valida y ejecuta};
+\node[caja=gray]   (sqlite) at (12.4,0) {SQLite\\[-1pt]\scriptsize \texttt{mode=ro}};
 
-% 2. Flechas directas (Ida y vuelta a la BD)
-\draw[arrow] ([yshift=4mm]llm.east) -- node[lbl, above=1pt] {1. \texttt{SELECT ...}} ([yshift=4mm]api.west);
-\draw[arrow] ([yshift=4mm]api.east) -- node[lbl, above=1pt] {2. Ejecución} ([yshift=4mm]sqlite.west);
-\draw[arrow] ([yshift=-4mm]sqlite.west) -- node[lbl, below=1pt] {3. Resultados / Error} ([yshift=-4mm]api.east);
+\draw[flecha] ([yshift=3mm]llm.east)    -- node[et, above] {1. \texttt{SELECT …}} ([yshift=3mm]api.west);
+\draw[flecha] ([yshift=3mm]api.east)    -- node[et, above] {2. ejecuta}           ([yshift=3mm]sqlite.west);
+\draw[flecha] ([yshift=-3mm]sqlite.west)-- node[et, below] {3. filas o error}     ([yshift=-3mm]api.east);
 
-% 3. Ruta de Error (Bucle amplio por arriba, texto ENCIMA de la línea)
-\draw[arrow, draw=ugrred, rounded corners=12pt] 
-    ([xshift=-6mm]api.north) -- 
-    (6.9, 2.6) -- 
-    node[lbl, above=1pt, text=ugrred] {\textbf{Error sintáctico} $\rightarrow$ 4a. Feedback al modelo (Máx. 2 reintentos)} 
-    (0.6, 2.6) -- 
-    ([xshift=6mm]llm.north);
+% 4a. El error de SQLite se le devuelve al modelo como resultado de la herramienta
+\draw[flecha, draw=ugrred, rounded corners=6pt]
+      (5.4,0.6) -- (5.4,1.8) -- node[et, above, text=ugrred, pos=0.5]
+      {4a. si hay error, vuelve al modelo y corrige la consulta}
+      (0.8,1.8) -- (0.8,0.6);
 
-% 4. Ruta de Éxito (Bucle amplio por abajo, texto DEBAJO de la línea)
-\draw[arrow, draw=green!60!black, rounded corners=12pt] 
-    ([xshift=-6mm]api.south) -- 
-    (6.9, -2.6) -- 
-    node[lbl, below=1pt, text=green!60!black] {\textbf{Éxito (Filas)} $\rightarrow$ 4b. Datos truncados al límite (Máx. 50)} 
-    (0.6, -2.6) -- 
-    ([xshift=6mm]llm.south);
+% 4b. Camino correcto
+\draw[flecha, draw=subsectionblue, rounded corners=6pt]
+      (5.4,-0.6) -- (5.4,-1.8) -- node[et, below, text=subsectionblue, pos=0.5]
+      {4b. si va bien, filas truncadas a \texttt{MAX\_FILAS = 50}}
+      (0.8,-1.8) -- (0.8,-0.6);
 
-\end{tikzpicture}%
-}
-\caption{Flujo \textit{Text-to-SQL} y mecanismo de autocorrección.} %Si la consulta generada por el modelo contiene errores o palabras prohibidas, el \emph{backend} interrumpe la respuesta y devuelve el error al modelo para que genere una nueva instrucción corregida.}
+\end{tikzpicture}
+\caption{Traducción a SQL y autocorrección. La consulta que escribe el modelo
+nunca llega directamente a la base de datos: pasa por una capa que comprueba
+que sea una única sentencia de lectura y la ejecuta sobre una conexión
+\texttt{mode=ro}. Si SQLite devuelve un error, ese error se le entrega al
+modelo como resultado de la herramienta y corrige en la vuelta siguiente,
+dentro del tope de ocho iteraciones por turno.}
 \label{fig:text_to_sql}
 \end{figure}

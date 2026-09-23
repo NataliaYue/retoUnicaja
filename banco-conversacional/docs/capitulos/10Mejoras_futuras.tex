@@ -1,0 +1,93 @@
+\section{Líneas de trabajo futuras}
+
+Las limitaciones descritas en la sección anterior no son todas del mismo tipo:
+unas se resuelven con trabajo acotado y otras exigirían rediseñar una parte del
+sistema. Se recogen aquí ordenadas por esa distancia, indicando en cada caso qué
+limitación concreta vendrían a resolver.
+
+\subsection{Mejoras sobre lo ya construido}
+
+\begin{itemize}
+
+    \item \textbf{Reescritura de la pregunta con el contexto.} Es la respuesta
+    al fallo de resolución de referencias entre turnos. Antes de llamar al
+    modelo principal, una llamada corta reformularía ``¿y el año pasado?'' como
+    una pregunta completa y autónoma a partir de los últimos turnos. Tiene un
+    coste claro —una llamada más por turno— que habría que medir antes de
+    adoptarlo, ya que la latencia es una prioridad del proyecto.
+
+    \item \textbf{Cambiar a un modelo más capaz si el equipo lo permite.} El
+    modelo es una variable de entorno (\texttt{MODELO}, con \texttt{qwen3:8b}
+    por defecto), así que sustituirlo no supone tocar el código. Lo que decide
+    es el hardware: un modelo mayor necesita más memoria en la tarjeta gráfica y
+    genera más despacio, y en este proyecto la latencia es una prioridad. Es,
+    además, la otra vía para atacar el fallo de referencias entre turnos, que es
+    una limitación de razonamiento propia de un modelo de 8.000 millones de
+    parámetros más que un problema de diseño. El banco de pruebas es justamente
+    la herramienta para decidirlo: permite comparar precisión y latencia entre
+    dos modelos sobre las mismas 44 preguntas y comprobar si la mejora compensa
+    el tiempo de respuesta añadido.
+
+    \item \textbf{Previsión de meses distintos del actual.} La herramienta
+    \texttt{proyectar\_gasto} calcula siempre sobre el mes en curso. Añadirle un
+    parámetro de mes objetivo, y que rechace explícitamente los meses para los
+    que no hay base suficiente, evitaría que el modelo presente la cifra del mes
+    actual como si fuera la del siguiente.
+
+    \item \textbf{Servir las dependencias del navegador en local.} Descargar
+    Vega-Lite, las tipografías y los iconos y servirlos desde
+    \texttt{frontend/} haría que la aplicación funcionase sin conexión y
+    eliminaría la única dependencia externa que queda.
+
+    \item \textbf{Registro de auditoría.} Guardar en una tabla cada consulta
+    SQL generada, cada herramienta invocada y cada operación ejecutada, con su
+    resultado y su marca de tiempo. Es poco trabajo y encaja con el enfoque de
+    IA responsable: permite reconstruir después por qué el asistente respondió
+    lo que respondió.
+
+    \item \textbf{Ampliar el banco de pruebas y automatizarlo.} Las preguntas
+    actuales cubren los tipos del enunciado, pero el banco se ejecuta a mano.
+    Lanzarlo de forma automática ante cada cambio del \textit{prompt} detectaría
+    las regresiones en el momento en que se introducen, que es justo el problema
+    que motivó construirlo.
+
+\end{itemize}
+
+\subsection{Mejoras que requieren rediseño}
+
+\begin{itemize}
+
+    \item \textbf{Autenticación real y gestión de sesión.} Sustituir la pantalla
+    de acceso por una validación en el servidor, proteger el punto de entrada
+    \texttt{/ws} con un testigo de sesión, almacenar el PIN cifrado y limitar el
+    número de intentos por origen. Es el paso obligado para que la aplicación
+    deje de ser una demostración.
+
+    \item \textbf{Soporte multiusuario.} Implica añadir la noción de cuenta a
+    las tablas y a todas las consultas, asociar cada conexión a un titular y
+    sustituir SQLite por un gestor que admita varios escritores. El patrón de
+    validación, PIN y transacción se mantendría; lo que cambia es de dónde sale
+    la cuenta sobre la que se opera.
+
+    \item \textbf{Escalado del modelo.} Con un único modelo en una tarjeta
+    gráfica, las peticiones se atienden una detrás de otra. Atender a varios
+    usuarios a la vez exigiría una cola explícita y varias réplicas del modelo,
+    además de decidir qué ocurre cuando la espera supera lo tolerable.
+
+    \item \textbf{Ampliar el catálogo de operaciones.} Transferencias,
+    domiciliaciones o gestión de tarjetas encajarían en el mismo esquema que el
+    Bizum: extracción de la intención, validación en el \emph{backend},
+    confirmación con PIN y transacción. Cada nueva operación añade, eso sí,
+    texto al \textit{system prompt}, y ya se midió que el tamaño del
+    \textit{prompt} degrada las reglas existentes.
+
+    \item \textbf{Persistencia de la conversación.} Guardar el historial fuera
+    del proceso permitiría retomar una conversación tras una desconexión y
+    abriría la puerta a que el asistente recuerde preferencias entre sesiones.
+
+\end{itemize}
+
+De todas ellas, las dos que más cambiarían la experiencia son la reescritura de
+la pregunta con el contexto, porque elimina el único fallo sistemático que la
+evaluación detecta, y la autenticación real, porque es la diferencia entre una
+demostración y algo que pueda tocar dinero de verdad.

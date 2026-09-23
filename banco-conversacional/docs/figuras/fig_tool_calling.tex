@@ -1,35 +1,47 @@
-\begin{figure}[!ht]
+\begin{figure}[htbp]
 \centering
-\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
     font=\small,
-    backend/.style={draw=subsectionblue, fill=subsectionblue!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
-    llm/.style={draw=ugrred, fill=ugrred!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
-    front/.style={draw=orange!90, fill=orange!10, rounded corners=4pt, align=center, minimum width=4cm, minimum height=1.6cm, thick},
-    arrow/.style={-{Stealth[length=2.5mm]}, thick, draw=gray!80!black},
-    lbl/.style={font=\scriptsize, inner sep=4pt, text=gray!80!black}
+    caja/.style={draw=#1, fill=#1!8, rounded corners=3pt, align=center,
+                 minimum width=3.4cm, minimum height=1.15cm, inner sep=3pt},
+    caja/.default=subsectionblue,
+    hist/.style={draw=gray!60, fill=gray!8, rounded corners=2pt, align=left,
+                 font=\scriptsize\ttfamily, inner sep=4pt, minimum width=4.6cm},
+    flecha/.style={-{Stealth[length=2mm]}, thick, draw=gray!70!black},
+    et/.style={font=\scriptsize, text=gray!55!black, align=center, inner sep=2pt},
 ]
 
-% 1. Nodos mucho más separados (en X y en Y)
-\node[backend] (sql)   at (0, 0) {\textbf{Base de Datos (Backend)}\\Resultados SQL completos};
-\node[llm]     (llm)   at (7.5, 3) {\textbf{Modelo de Lenguaje}\\Diseño del componente visual};
-\node[backend] (merge) at (7.5, -3) {\textbf{Motor Visual (Backend)}\\Inyección de datos};
-\node[front]   (ui)    at (15.5, -3) {\textbf{Interfaz (Frontend)}\\Renderizado visual}; % Nodo desplazado más a la derecha
+% --- Actores ---------------------------------------------------------------
+\node[caja]        (ag)  at (0,0)    {\texttt{agent.py}\\[-1pt]\scriptsize bucle agéntico};
+\node[caja=ugrred] (llm) at (7.6,0)  {Modelo\\[-1pt]\scriptsize \texttt{qwen3:8b}};
+\node[caja=gray]   (fn)  at (0,-3.8) {Función Python\\[-1pt]\scriptsize \texttt{ejecutar\_tool}};
 
-% 2. Flecha hacia el LLM (Arriba, giro suave)
-\draw[arrow, rounded corners=8pt] (sql.north) |- node[lbl, above=2pt, pos=0.75] {1. Metadatos y muestra (3 filas)} (llm.west);
+% --- Ciclo -----------------------------------------------------------------
+\draw[flecha] ([yshift=3mm]ag.east) -- node[et, above]
+      {1. mensajes + esquemas\\de las 6 herramientas} ([yshift=3mm]llm.west);
+\draw[flecha] ([yshift=-3mm]llm.west) -- node[et, below]
+      {2. \texttt{tool\_calls}: nombre\\y argumentos en JSON} ([yshift=-3mm]ag.east);
+\draw[flecha] (ag) -- node[et, left] {3. ejecuta} (fn);
+\draw[flecha] ([xshift=6mm]fn.north) -- node[et, right]
+      {4. resultado como\\mensaje de rol \texttt{tool}} ([xshift=6mm]ag.south);
 
-% 3. Flecha del LLM al Motor Visual (Centro, recta)
-\draw[arrow] (llm.south) -- node[lbl, right=2pt] {2. Esqueleto JSON vacío} (merge.north);
+\draw[flecha, draw=subsectionblue] (llm.north) .. controls (7.6,2.0) and (0,2.0) ..
+      node[et, above, text=subsectionblue, pos=0.5] {se repite hasta que el modelo responde sin pedir herramientas (máx.\ 8 vueltas)}
+      (ag.north);
 
-% 4. Flecha de la BD al Motor Visual (Abajo, giro suave)
-\draw[arrow, rounded corners=8pt] (sql.south) |- node[lbl, below=2pt, pos=0.75] {3. Inserción del 100\% de las filas} (merge.west);
+% --- Historial resultante --------------------------------------------------
+\node[hist, anchor=north west] (h) at (4.0,-2.6)
+      {\textcolor{gray}{system}: reglas y esquema\\
+       \textcolor{gray}{user}: ¿cuánto gasté en gasolina?\\
+       \textcolor{gray}{assistant}: \textit{tool\_calls}\\
+       \textcolor{gray}{tool}: \{"filas": [[84.2]]\}\\
+       \textcolor{gray}{assistant}: Has gastado 84,20 €};
+\node[et, anchor=south west] at (4.0,-2.5) {El historial que se reenvía en cada vuelta};
 
-% 5. Flecha al Frontend (Derecha, recta con espacio amplio)
-\draw[arrow] (merge.east) -- node[lbl, above=2pt] {4. Envío por WebSocket} (ui.west);
-
-\end{tikzpicture}%
-}
-\caption{Arquitectura del Motor Visual Generativo (\textit{Generative UI}).} %El modelo de lenguaje actúa únicamente como diseñador de la estructura visual, mientras que el \emph{backend} asegura la integridad de la información inyectando los datos reales. Esto ahorra \textit{tokens} y elimina el riesgo de alucinaciones numéricas.}
-\label{fig:generative_ui}
+\end{tikzpicture}
+\caption{Ciclo de \textit{tool calling}. El modelo nunca ejecuta nada: devuelve
+el nombre de la herramienta y sus argumentos, el \emph{backend} ejecuta la
+función en Python y le devuelve el resultado como un mensaje más del historial.
+Con ese dato ya concreto, el modelo redacta la respuesta final.}
+\label{fig:flujo_agente}
 \end{figure}

@@ -28,8 +28,10 @@ Toda la comunicación en tiempo real entre el \textit{cliente} y
 el \textit{servidor} se realiza a través de una conexión WebSocket 
 abierta de forma continua. Gracias a este canal, el usuario no 
 tiene que esperar a que el servidor procese la respuesta completa 
-para empezar a leerla, sino que los \textit{tokens} van apareciendo
-en la interfaz según los emite el modelo de lenguaje.   
+para empezar a leerla, sino que el texto va apareciendo en la interfaz
+frase a frase, a medida que el modelo las completa. La unidad no es el
+\textit{token} sino la frase, porque es lo que la síntesis de voz puede
+leer sin cortar palabras ni tropezar con los decimales.
 
 Además del texto de la respuesta, pueden transmitirse 
 actualizaciones relacionadas con los datos mostrados en pantalla,

@@ -1,35 +1,31 @@
-\begin{figure}[!ht]
+\begin{figure}[htbp]
 \centering
-\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
     font=\small,
-    backend/.style={draw=subsectionblue, fill=subsectionblue!10, rounded corners=4pt, align=center, minimum width=3.8cm, minimum height=1.5cm, thick},
-    llm/.style={draw=ugrred, fill=ugrred!10, rounded corners=4pt, align=center, minimum width=3.8cm, minimum height=1.5cm, thick},
-    front/.style={draw=orange!90, fill=orange!10, rounded corners=4pt, align=center, minimum width=3.8cm, minimum height=1.5cm, thick},
-    arrow/.style={-{Stealth[length=2.5mm]}, thick, draw=gray!80!black},
-    lbl/.style={font=\scriptsize, inner sep=4pt, text=gray!80!black}
+    caja/.style={draw=#1, fill=#1!8, rounded corners=3pt, align=center,
+                 minimum width=3.6cm, minimum height=1.2cm, inner sep=3pt},
+    caja/.default=subsectionblue,
+    flecha/.style={-{Stealth[length=2mm]}, thick, draw=gray!70!black},
+    et/.style={font=\scriptsize, text=gray!55!black, align=center, inner sep=2pt},
 ]
 
-% 1. Nodos
-\node[backend] (sql)   at (0, 0) {\textbf{Base de Datos (Backend)}\\Resultados SQL completos};
-\node[llm]     (llm)   at (6.5, 2.5) {\textbf{Modelo de Lenguaje}\\Diseño del componente visual};
-\node[backend] (merge) at (6.5, -2.5) {\textbf{Motor Visual (Backend)}\\Inyección de datos};
-\node[front]   (ui)    at (13, -2.5) {\textbf{Interfaz (Frontend)}\\Renderizado (Vega-Lite / Tabla)};
+\node[caja=gray]          (sql)   at (0,0)      {Resultado SQL\\[-1pt]\scriptsize todas las filas};
+\node[caja=ugrred]        (llm)   at (5.8,2.1)  {Modelo\\[-1pt]\scriptsize diseña la representación};
+\node[caja]               (merge) at (5.8,-2.1) {\texttt{graficos.py}\\[-1pt]\scriptsize inyecta los datos};
+\node[caja]               (ui)    at (11.4,-2.1){Interfaz\\[-1pt]\scriptsize Vega-Lite o tabla};
 
-% 2. Flecha hacia el LLM (Arriba)
-\draw[arrow] (sql.north) |- node[lbl, above=1pt, pos=0.75] {1. Metadatos y muestra (3 filas)} (llm.west);
+\draw[flecha] (sql.north) |- node[et, above, pos=0.72]
+      {1. nombres de columna\\y muestra de 3 filas} (llm.west);
+\draw[flecha] (llm.south) -- node[et, right]
+      {2. tipo, estructura\\y razonamiento,\\sin ninguna cifra} (merge.north);
+\draw[flecha] (sql.south) |- node[et, below, pos=0.72]
+      {3. el 100\,\% de las filas} (merge.west);
+\draw[flecha] (merge.east) -- node[et, above] {4. WebSocket} (ui.west);
 
-% 3. Flecha del LLM al Inyector (Abajo)
-\draw[arrow] (llm.south) -- node[lbl, right=1pt] {2. Esqueleto JSON vacío} (merge.north);
-
-% 4. Flecha de la BD al Inyector (Abajo)
-\draw[arrow] (sql.south) |- node[lbl, below=1pt, pos=0.75] {3. Inserción del 100\% de las filas} (merge.west);
-
-% 5. Flecha al Frontend (Derecha)
-\draw[arrow] (merge.east) -- node[lbl, above=1pt] {4. Envío por WebSocket} (ui.west);
-
-\end{tikzpicture}%
-}
-\caption{Arquitectura del Motor Visual Generativo (\textit{Generative UI}). El modelo de lenguaje actúa únicamente como diseñador de la estructura visual, mientras que el \emph{backend} asegura la integridad de la información inyectando los datos reales. Esto ahorra \textit{tokens} y elimina el riesgo de alucinaciones numéricas.}
+\end{tikzpicture}
+\caption{Motor visual generativo. El modelo solo decide cómo representar la
+información; los valores los pone el \emph{backend}, que ya los tiene. Esto
+ahorra unos 700 \textit{tokens} de generación por elemento visual y elimina de
+raíz que el modelo se invente cifras al copiarlas.}
 \label{fig:generative_ui}
 \end{figure}
