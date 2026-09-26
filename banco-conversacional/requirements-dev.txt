@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Solo para ejecutar los tests; la aplicación no lo necesita.
+pytest>=8

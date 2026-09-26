@@ -81,11 +81,11 @@ datos sintética antes de cada evaluación.
 \toprule
 \textbf{Indicador} & \textbf{Resultado} \\
 \midrule
-Elección de herramienta            & 97,6 \% \\
-Respuesta final correcta           & 88,9 \% \\
-Refuerzo visual cuando corresponde & 100 \% \\
+Elección de herramienta            & 96,8 \% \\
+Respuesta final correcta           & 90,5 \% \\
+Refuerzo visual cuando corresponde & 96,3 \% \\
 Especificaciones válidas           & 100 \% \\
-Latencia mediana hasta la voz      & 3,3 s \\
+Latencia mediana hasta la voz      & 3,4 s \\
 \bottomrule
 \end{tabular}
 \caption{Resultados sobre 44 preguntas y 3 repeticiones.}
@@ -131,8 +131,11 @@ numérica, o una sola fila con dos o más cifras comparables. La decisión de
 y con qué justificación, permanece en el modelo, en una llamada dedicada de
 tarea única.
 
-El indicador pasó del 16,7 \% al 100 \%, sin variación en la precisión de las
-respuestas ni en la latencia percibida. La Figura~\ref{fig:resultados} recoge
+El indicador pasó del 16,7 \% al 100 \% en la medición que validó el cambio, sin
+variación en la precisión de las respuestas ni en la latencia percibida. En la
+tabla de resultados actual figura un 96,3 \%: la diferencia no viene de la regla
+determinista, sino de una pregunta en la que el modelo elige la herramienta
+equivocada y su resultado sí es tabulable. La Figura~\ref{fig:resultados} recoge
 ese cambio junto al de la latencia, que es la otra decisión que se tomó a partir
 de una medición.
 
@@ -234,8 +237,8 @@ sustancialmente menos honesto.
 
 \subsubsection{Flujo de operaciones}
 
-El envío de Bizums se valida mediante 35 comprobaciones que recorren el flujo
-completo sin intervención del modelo: reconocimiento de la petición, validación
+El envío de Bizums se valida mediante 32 casos de prueba, ejecutados con
+\texttt{pytest}, que recorren el flujo completo sin intervención del modelo: reconocimiento de la petición, validación
 del importe, resolución del contacto, gestión del PIN y atomicidad de la
 escritura.
 

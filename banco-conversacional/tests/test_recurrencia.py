@@ -131,5 +131,14 @@ def main(n_semillas: int = 50) -> int:
     return 0 if todo_ok else 1
 
 
+def test_la_deteccion_generaliza():
+    """
+    Entrada para pytest. Una sola comprobación y no 50 casos
+    parametrizados, se valida es el agregado: cero falsos
+    positivos y cero falsos negativos.
+    """
+    assert main(50) == 0
+
+
 if __name__ == "__main__":
     sys.exit(main(int(sys.argv[1]) if len(sys.argv) > 1 else 50))

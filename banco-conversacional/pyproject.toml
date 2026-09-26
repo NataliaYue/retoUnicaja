@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# Permite `from backend...` sin el sys.path.insert de cada fichero.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
