@@ -190,8 +190,10 @@ Cliente → servidor: `{"mensaje": …}` y `{"type": "auth_bizum", "pin": …}`.
 Nada de lo de arriba se afirma sin medirlo. Tres batches de test:
 
 ```bash
-python -m tests.test_bizum          # 35 comprobaciones del flujo de dinero. Sin LLM, ~10 s
-python -m tests.test_recurrencia    # detector contra N semillas. Sin LLM, ~30 s
+pip install -r requirements-dev.txt        # añade pytest
+
+pytest                              # 33 tests deterministas: flujo del dinero y detector de recurrencia. Sin LLM, ~2 s
+pytest -k bizum -v                  # solo el flujo del dinero, con el nombre de cada caso
 python -m tests.evaluar --repeticiones 3   # 44 preguntas. Necesita Ollama, ~13 min
 ```
 
@@ -203,11 +205,11 @@ Los valores esperados se recalculan desde la BD en cada ejecución, así que no 
 
 | | |
 |---|---|
-| Elección de herramienta | **97,6 %** |
+| Elección de herramienta | **96,8 %** |
 | Respuesta final correcta | **90,5 %** |
-| Refuerzo visual cuando toca | **27/27** |
+| Refuerzo visual cuando toca | **78/81** |
 | Specs que llegan a pintarse | **21/21** |
-| Latencia hasta la voz (mediana) | **3,3 s** |
+| Latencia hasta la voz (mediana) | **3,4 s** |
 
 ---
 
@@ -229,7 +231,7 @@ Los valores esperados se recalculan desde la BD en cada ejecución, así que no 
 ```
 README.md · README.es.md · TODO.md
 banco-conversacional/
-├── requirements.txt · .env.example
+├── requirements.txt · requirements-dev.txt · .env.example · pyproject.toml
 ├── arrancar_ollama.sh     ← ctx 8192; sin esto la calidad cae en silencio
 ├── banco.db               ← se genera con: python -m backend.seed
 ├── backend/
@@ -247,7 +249,8 @@ banco-conversacional/
 ├── docs/                  ← memoria en LaTeX (main.tex + capitulos/)
 └── tests/
     ├── preguntas.jsonl    ← 44 preguntas etiquetadas
-    ├── evaluar.py         ← banco de precisión
+    ├── conftest.py        ← fixture que restaura banco.db tras los tests
+    ├── evaluar.py         ← banco de precisión (script, no pytest)
     ├── test_bizum.py      ← flujo de dinero, determinista
     └── test_recurrencia.py← detector contra N semillas
 ```
