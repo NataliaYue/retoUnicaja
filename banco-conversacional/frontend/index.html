@@ -278,6 +278,7 @@
   .entrada button:hover{background:var(--verde-claro); color:var(--verde)}
   .entrada button.enviar{background:var(--verde); color:#fff}
   .entrada button.mic.grabando{background:var(--rojo); color:#fff; animation:pulso 1.2s infinite}
+  .entrada button.mic.sin-soporte{opacity:.45; cursor:not-allowed}
   @keyframes pulso{50%{box-shadow:0 0 0 8px rgba(179,64,42,.15)}}
   .entrada button.tts.activo { background: var(--verde-claro); color: var(--verde); }
   .pie{max-width:760px; margin:8px auto 0; text-align:center; font-size:0.8em; color:var(--tinta-suave)}
@@ -996,6 +997,23 @@ function nuevaBurbuja(){
 const Reconocedor = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 
+const SIN_SOPORTE_VOZ = 'Tu navegador no admite reconocimiento de voz. Usa Chrome o Edge; mientras tanto puedes escribir.';
+
+// Solo los errores que el usuario puede resolver. 'aborted' salta al detener
+// la grabación a propósito y no debe avisar de nada.
+const MOTIVOS_ERROR_VOZ = {
+  'not-allowed':         'No hay permiso para usar el micrófono. Actívalo desde el icono del candado de la barra de direcciones.',
+  'service-not-allowed': 'No hay permiso para usar el micrófono. Actívalo desde el icono del candado de la barra de direcciones.',
+  'audio-capture':       'No se encuentra ningún micrófono conectado.',
+  'network':             'El reconocimiento de voz necesita conexión a internet.',
+  'no-speech':           'No te he oído. Pulsa el micrófono y prueba otra vez.',
+};
+
+if (!Reconocedor) {
+  btnMic.classList.add('sin-soporte');
+  btnMic.title = SIN_SOPORTE_VOZ;
+}
+
 if (Reconocedor) {
   rec = new Reconocedor();
   rec.lang = 'es-ES';
@@ -1019,11 +1037,15 @@ if (Reconocedor) {
     ultimaEntradaFueVoz = true;
     enviar(pendiente);
   };
-  rec.onerror = () => btnMic.classList.remove('grabando');
+  rec.onerror = (e) => {
+    btnMic.classList.remove('grabando');
+    const motivo = MOTIVOS_ERROR_VOZ[e.error];
+    if (motivo) avisar(motivo);
+  };
 }
 
 btnMic.addEventListener('click', () => {
-  if (!rec) return;
+  if (!rec) { avisar(SIN_SOPORTE_VOZ); return; }
   if (btnMic.classList.contains('grabando')) { rec.stop(); return; }
   speechSynthesis.cancel();
   btnMic.classList.add('grabando');
