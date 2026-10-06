@@ -51,6 +51,19 @@ limitación concreta vendrían a resolver.
     las regresiones en el momento en que se introducen, que es justo el problema
     que motivó construirlo.
 
+    \item \textbf{Lectura de recibos por OCR.} Existe un prototipo en una rama
+    aparte que permite adjuntar la imagen de una factura: el \emph{backend}
+    extrae el texto con Tesseract, en local, y el modelo identifica el
+    comercio, el importe y la categoría. Se decidió no integrarlo por la gran
+    variedad de formatos de recibos y facturas posibles, que hace difícil
+    garantizar una extracción fiable. Además, el texto completo del recibo
+    entraría en el historial y ocuparía unos 600 \textit{tokens} de la ventana
+    de contexto, aunque esto se resolvería conservando solo los datos
+    extraídos. Una base de datos semántica de documentos solo compensaría si el
+    usuario fuera a consultar muchas facturas a la vez. Luego consideramos que 
+    para una demo no era necesario.
+
+
 \end{itemize}
 
 \subsection{Mejoras que requieren rediseño}
