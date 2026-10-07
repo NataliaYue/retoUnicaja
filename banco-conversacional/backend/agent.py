@@ -1,3 +1,6 @@
+import base64
+import io
+from pypdf import PdfReader
 import asyncio
 import os
 import re
@@ -717,6 +720,46 @@ class Agente:
 
         await self.responder_directo(texto, emitir_inicio=False)
     
+    async def procesar_archivo(self, nombre: str, contenido_base64: str, es_pdf:bool) -> None:
+        """
+        Decodifica el archivo en Base64, extrae el texto si es PDF, lo inyecta en el prompt 
+        y genera una respuesta.
+        """
+        try:
+            texto_extraido = ""
+
+            archivo_bytes = base64.b64decode(contenido_base64)
+
+            if es_pdf:
+                lector_pdf = PdfReader(io.BytesIO(archivo_bytes))
+                for pagina in lector_pdf.pages:
+                    texto_pagina = pagina.extract_text()
+                    if texto_pagina:
+                        texto_extraido += texto_pagina + "\n"
+            else:
+                texto_extraido = archivo_bytes.decode("utf-8")
+
+            texto_extraido = texto_extraido.strip()
+            if not texto_extraido:
+                raise ValueError("No se pudo extraer texto del documento.")
+
+            mensaje = (
+                f"He subido un documento llamado '{nombre}'. "
+                f"Su contenido es el siguiente:\n\n---\n{texto_extraido}\n---\n\n"
+                f"Por favor, confírmame que lo has recibido y haz un brevísimo "
+                f"resumen de 1 o 2 frases sobre de qué trata para saber que lo has leído."
+            )
+
+            await self._procesar(mensaje)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            await self.emitir({
+                "type": "error",
+                "detalle": f"Ha ocurrido un error al intentar leer el documento: {str(e)}"
+            })
+            await self.emitir({"type": "fin_respuesta", "texto":""})
 
     async def iniciar_bizum(
         self,

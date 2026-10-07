@@ -66,6 +66,54 @@
     position: relative;
     z-index: 1;
   }
+
+  #zona-archivos {
+    max-width: 760px;
+    margin: 0 auto 10px auto;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 4px 6px 4px;
+  }
+  #zona-archivos.oculto {
+    display: none;
+  }
+  .chip-archivo {
+    background: var(--superficie);
+    border: 1px solid var(--linea);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.85em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  .chip-archivo span {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--tinta);
+  }
+  .chip-archivo button.eliminar-archivo {
+    background: transparent;
+    border: none;
+    color: var(--rojo);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
+    margin-left: 4px;
+    border-radius: 50%;
+  }
+  .chip-archivo button.eliminar-archivo:hover {
+    transform: scale(1.2);
+  }
+
+  #zona-archivos::-webkit-scrollbar { height: 6px; }
+  #zona-archivos::-webkit-scrollbar-track { background: transparent; }
+  #zona-archivos::-webkit-scrollbar-thumb { background: var(--linea); border-radius: 10px; }
   
   #chat::before {
     content: '';
@@ -281,7 +329,10 @@
   @keyframes pulso{50%{box-shadow:0 0 0 8px rgba(179,64,42,.15)}}
   .entrada button.tts.activo { background: var(--verde-claro); color: var(--verde); }
   .pie{max-width:760px; margin:8px auto 0; text-align:center; font-size:0.8em; color:var(--tinta-suave)}
-
+  
+  .entrada button.ins.girado {
+    transform: rotate(45deg);
+  }
   button:focus-visible, input:focus-visible, summary:focus-visible{outline:2px solid var(--verde); outline-offset:2px}
   @media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important} }
 
@@ -512,7 +563,11 @@
 </main>
 
 <footer>
+  <div id="zona-archivos" class="oculto"></div>
+
   <div class="entrada">
+    <input type="file" id="inputFile" accept=".txt,.md,.csv,.json,.pdf" multiple style="display: none;">
+    <button class="ins" type="buton" id="btnInsert" title="Insertar archivo">+</button>
     <input id="input" type="text" placeholder="Escribe o pulsa el micrófono…" autocomplete="off">
     <button class="tts" id="btnTts" title="Leer respuestas en voz alta">🔊</button>
     <button class="mic" id="btnMic" title="Hablar">🎙️</button>
@@ -628,6 +683,8 @@ const input = document.getElementById('input');
 const saldoEl = document.getElementById('saldo');
 const btnMic = document.getElementById('btnMic');
 const btnTts = document.getElementById('btnTts');
+const btnFile = document.getElementById('btnInsert');
+const inputFile = document.getElementById('inputFile');
 
 let ws = null;
 let bloqueActual = null;
@@ -695,17 +752,39 @@ function iniciarSesion() {
 
 function enviar(texto){
   texto = (texto || input.value).trim();
-  if (!texto || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if ((!texto && archivosPendientes.length === 0) || !ws || ws.readyState !== WebSocket.OPEN) return;
   document.getElementById('sugerencias')?.remove();
   speechSynthesis.cancel();
 
   const burbuja = document.createElement('div');
   burbuja.className = 'msg usuario';
-  burbuja.textContent = texto;
+
+  let contenidoHTML = texto ? escapar(texto) : '';
+
+  if (archivosPendientes.length > 0) {
+    const listaArchivosHTML = archivosPendientes.map(a => `📄 <b>${a.nombre}</b>`).join('<br>');
+    contenidoHTML += (contenidoHTML ? '<br><br>' : '') + listaArchivosHTML;
+  }
+
+  burbuja.innerHTML = contenidoHTML;
   chat.appendChild(burbuja);
 
-  ws.send(JSON.stringify({ mensaje: texto }));
+  if (texto) {
+    ws.send(JSON.stringify({mensaje: texto}));
+  }
+
+  archivosPendientes.forEach(archivo => {
+    ws.send(JSON.stringify({
+      type: "archivo",
+      nombre: archivo.nombre,
+      contenido: archivo.contenido,
+      es_pdf: archivo.es_pdf
+    }));
+  });
+
   input.value = '';
+  archivosPendientes = [];
+  renderizarArchivosPendientes();
   bajar();
 }
 
@@ -1389,6 +1468,60 @@ function obtenerFaviconComercio(comercio) {
         return `<img src="${avatarIniciales}" width="16" height="16" style="vertical-align: middle; margin-right: 8px; border-radius: 50%;">`;
     }
 }
+
+btnFile.addEventListener('click', () => {
+  inputFile.click();
+});
+
+let archivosPendientes = [];
+const zonaArchivos = document.getElementById('zona-archivos');
+
+inputFile.addEventListener("change", async (e) => {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+
+  for (const file of files) {
+    if (archivosPendientes.some(f => f.nombre === file.name)) continue;
+
+    const base64Data = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (evento) => resolve(evento.target.result.split(",")[1]);
+      reader.readAsDataURL(file);
+    });
+    archivosPendientes.push({
+      nombre: file.name,
+      contenido: base64Data,
+      es_pdf:file.name.toLowerCase().endsWith(".pdf")
+    });
+  }
+
+  renderizarArchivosPendientes();
+  inputFile.value = "";
+});
+
+function renderizarArchivosPendientes() {
+  zonaArchivos.innerHTML = "";
+  if (archivosPendientes.length === 0) {
+    zonaArchivos.classList.add("oculto");
+    return;
+  }
+  zonaArchivos.classList.remove("oculto");
+  archivosPendientes.forEach((archivo, index) => {
+    const chip = document.createElement("div");
+    chip.className = "chip-archivo";
+    chip.innerHTML = `
+      📄 <span>${archivo.nombre}</span> 
+      <button class="eliminar-archivo" title="Eliminar archivo">×</button>
+    `;
+
+    chip.querySelector('.eliminar-archivo').addEventListener('click', ()=>{
+      archivosPendientes.splice(index,1);
+      renderizarArchivosPendientes();
+    });
+    zonaArchivos.appendChild(chip);
+  });
+}
+
 </script>
 </body>
 </html>
