@@ -190,8 +190,14 @@ mejor alineados que dibujados.
 Si eliges GRÁFICO, devuelve estas claves:
   "representacion": "grafico"
   "title": título en español
-  "mark": la marca Vega-Lite — "line" para evolución o tendencia, "bar" para
-          ranking o comparación por categoría, "arc" para reparto de un total
+  "mark": la marca Vega-Lite, según lo que PREGUNTA el usuario:
+          "line" si pregunta por la evolución o la tendencia en el tiempo;
+          "bar" si pregunta dónde o en qué gasta MÁS (o menos), por un
+          ranking, o compara periodos;
+          "arc" (tarta) solo si pregunta cómo se REPARTE el total, qué parte
+          o qué porcentaje supone cada parte o categoria de un gasto, o en qué se le va el dinero.
+          Con "arc" usa "theta" para la cifra y "color" para la categoría,
+          nunca "x" ni "y".
   "encoding": encoding de Vega-Lite v5, usando EXACTAMENTE los nombres de
           columna de arriba en los "field", con su "type" ("nominal",
           "quantitative" o "temporal") y un "title" en español por eje
@@ -243,16 +249,41 @@ def _construir_tabla(parcial: dict, columnas: list[str], filas: list[dict]) -> d
     }
 
 
+def _encoding_de_tarta(mark, encoding: dict) -> dict:
+    """
+    Una tarta ("arc") solo se pinta con `theta` y `color`. Si el modelo la
+    codifica con ejes x/y, vega-embed no da error pero el gráfico sale vacío,
+    así que se traduce: el eje cuantitativo pasa a `theta` y el otro a `color`.
+    """
+    tipo = mark.get("type") if isinstance(mark, dict) else mark
+    if tipo != "arc" or "theta" in encoding:
+        return encoding
+
+    ejes = [encoding.get(c) for c in ("x", "y") if isinstance(encoding.get(c), dict)]
+    cifra = next((e for e in ejes if e.get("type") == "quantitative"), None)
+    categoria = next((e for e in ejes if e is not cifra), None)
+    if not cifra:
+        return encoding
+
+    nuevo = {k: v for k, v in encoding.items() if k not in ("x", "y")}
+    nuevo["theta"] = cifra
+    if categoria and "color" not in nuevo:
+        nuevo["color"] = {**categoria, "type": "nominal"}
+    return nuevo
+
+
 def _construir_grafico(parcial: dict, filas: list[dict]) -> dict | None:
     """Valida la spec y le inyecta los datos reales."""
     # `mark` y `encoding` son obligatorios: sin ellos vega-embed no pinta nada.
     if not parcial.get("mark") or not isinstance(parcial.get("encoding"), dict):
         return None
 
+    encoding = _encoding_de_tarta(parcial["mark"], parcial["encoding"])
+
     return {
         "title": parcial.get("title") or "",
         "mark": parcial["mark"],
-        "encoding": parcial["encoding"],
+        "encoding": encoding,
         "data": {"values": filas},
     }
 
