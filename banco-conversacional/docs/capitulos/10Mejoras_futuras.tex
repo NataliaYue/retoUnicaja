@@ -51,17 +51,20 @@ limitación concreta vendrían a resolver.
     las regresiones en el momento en que se introducen, que es justo el problema
     que motivó construirlo.
 
-    \item \textbf{Lectura de recibos por OCR.} Existe un prototipo en una rama
-    aparte que permite adjuntar la imagen de una factura: el \emph{backend}
-    extrae el texto con Tesseract, en local, y el modelo identifica el
-    comercio, el importe y la categoría. Se decidió no integrarlo por la gran
-    variedad de formatos de recibos y facturas posibles, que hace difícil
-    garantizar una extracción fiable. Además, el texto completo del recibo
-    entraría en el historial y ocuparía unos 600 \textit{tokens} de la ventana
-    de contexto, aunque esto se resolvería conservando solo los datos
-    extraídos. Una base de datos semántica de documentos solo compensaría si el
-    usuario fuera a consultar muchas facturas a la vez. Luego consideramos que 
-    para una demo no era necesario.
+    \item \textbf{Extracción documental (Imágenes y PDF).} Se han desarrollado prototipos 
+    funcionales para la lectura y extracción de información financiera a partir de imágenes 
+    (recibos) y documentos PDF aportados por el usuario. Sin embargo, ambas características 
+    se han mantenido en ramas de experimentación y no se han integrado en la rama principal. 
+    Se comprobó empíricamente que su integración directa produce una degradación inasumible en 
+    el rendimiento, la latencia y la precisión del LLM subyacente, al saturar la ventana de 
+    contexto con los tokens extraídos de los documentos.
+
+    \item \textbf{Migración del gestor de dependencias a uv.} Actualmente, la gestión de 
+    paquetes y dependencias del entorno de Python se realiza mediante \texttt{pip}. Como mejora 
+    técnica operativa, se propone migrar el proyecto al uso de \texttt{uv}, un gestor de paquetes 
+    alternativo escrito en Rust. Esto permitiría reducir drásticamente los tiempos de instalación 
+    del entorno, mejorar la reproducibilidad de las dependencias y optimizar los flujos de 
+    integración continua del repositorio.
 
 
 \end{itemize}
