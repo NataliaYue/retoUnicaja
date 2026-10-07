@@ -769,18 +769,11 @@ function enviar(texto){
   burbuja.innerHTML = contenidoHTML;
   chat.appendChild(burbuja);
 
-  if (texto) {
-    ws.send(JSON.stringify({mensaje: texto}));
-  }
-
-  archivosPendientes.forEach(archivo => {
-    ws.send(JSON.stringify({
-      type: "archivo",
-      nombre: archivo.nombre,
-      contenido: archivo.contenido,
-      es_pdf: archivo.es_pdf
-    }));
-  });
+  ws.send(JSON.stringify({
+    type: "chat",
+    mensaje: texto,
+    archivos: archivosPendientes
+  }));
 
   input.value = '';
   archivosPendientes = [];

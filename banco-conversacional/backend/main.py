@@ -104,22 +104,16 @@ async def websocket_chat(ws: WebSocket):
             try:
                 if tipo_evento == "chat":
                     mensaje = (datos_ws.get("mensaje") or "").strip()
-                    if mensaje:
+                    archivos = datos_ws.get("archivos") or []
+                    if mensaje or archivos:
                         # Solo los mensajes normales de chat van al historial
-                        await agente.procesar(mensaje)
+                        await agente.procesar(mensaje, archivos)
 
                 elif tipo_evento == "auth_bizum":
                     pin = datos_ws.get("pin")
                     if pin:
                         # Este método aísla la contraseña del LLM
                         await agente.validar_pin_bizum(pin)
-
-                elif tipo_evento == "archivo":
-                    nombre = datos_ws.get("nombre", "documento")
-                    contenido = datos_ws.get("contenido", "")
-                    es_pdf = datos_ws.get("es_pdf", False)
-                    if contenido:
-                        await agente.procesar_archivo(nombre, contenido, es_pdf)
 
             except WebSocketDisconnect:
                 raise

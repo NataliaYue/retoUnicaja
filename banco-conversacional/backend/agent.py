@@ -510,7 +510,13 @@ class Agente:
     def __init__(self, emitir):
         self.emitir = emitir
         self.historial: list[dict] = []
-        self.system = system_prompt()
+
+        self.system_base = system_prompt()
+        self.system = self.system_base
+
+        # Memoria permanente para documentos. El agente nunca olvidará los documentos, a no ser que se recarga la pagina.
+        self.textos_documentos = []
+        
         # Guarda un Bizum pendiente hasta que el usuario confirme o cancele.
         self.bizum_pendiente: dict | None = None
         self.correccion_contacto_pendiente: dict | None = None
@@ -719,7 +725,8 @@ class Agente:
             )
 
         await self.responder_directo(texto, emitir_inicio=False)
-    
+
+    # Función obsoleta
     async def procesar_archivo(self, nombre: str, contenido_base64: str, es_pdf:bool) -> None:
         """
         Decodifica el archivo en Base64, extrae el texto si es PDF, lo inyecta en el prompt 
@@ -869,7 +876,7 @@ class Agente:
             datos.get("concepto", ""),
         )
         
-    async def procesar(self, mensaje_usuario: str) -> None:
+    async def procesar(self, mensaje_usuario: str, archivos: list[dict] = None) -> None:
         """
         Punto de entrada de un turno de conversación.
 
@@ -878,6 +885,64 @@ class Agente:
         un Agente nuevo, así que el usuario pierde todo el historial sin que
         nada se lo diga.
         """
+
+        archivos = archivos or []
+        nombres_subidos = []
+
+        for arch in archivos:
+            try:
+                nombre = arch.get("nombre", "documento")
+                contenido_base64 = arch.get("contenido", "")
+                es_pdf = arch.get("es_pdf", False)
+
+                archivo_bytes = base64.b64decode(contenido_base64)
+                texto_extraido = ""
+
+                if es_pdf:
+                    lector_pdf = PdfReader(io.BytesIO(archivo_bytes))
+                    for pagina in lector_pdf.pages:
+                        texto_pagina = pagina.extract_text()
+                        if texto_pagina:
+                            texto_extraido += texto_pagina + "\n"
+
+                else:
+                    texto_extraido = archivo_bytes.decode("utf-8")
+
+                texto_extraido = texto_extraido.strip()
+                if texto_extraido:
+                    self.textos_documentos.append(f"--- Documento: {nombre} ---\n{texto_extraido}")
+                    nombres_subidos.append(nombre)
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                await self.emitir({
+                    "type": "error",
+                    "detalle": f"Error al intentar leer '{nombre}': {str(e)}"
+                })
+
+        if self.textos_documentos:
+            bloque_docs = (
+                "\n\n=== DOCUMENTOS ADJUNTOS EN LA SESIÓN ===\n"
+                "El usuario ha subido estos documentos. Úsalos como contexto permanente "
+                "para responder a cualquier pregunta sobre ellos:\n\n"
+            ) + "\n\n".join(self.textos_documentos)
+
+            self.system = self.system_base + bloque_docs
+            if self.historial and self.historial[0].get("role") == "system":
+                self.historial[0]["content"] = self.system
+
+        mensaje_usuario = mensaje_usuario.strip()
+        
+        # Si el usuario sube archivos sin escribir, le enviamos un prompt automático silencioso
+        if not mensaje_usuario and nombres_subidos:
+            lista = ", ".join(nombres_subidos)
+            mensaje_usuario = f"He subido los documentos: {lista}. Confírmame que los has recibido y haz un resumen breve de qué tratan."
+
+        if not mensaje_usuario:
+            return
+            
+
         try:
             await self._procesar(mensaje_usuario)
         except Exception:
